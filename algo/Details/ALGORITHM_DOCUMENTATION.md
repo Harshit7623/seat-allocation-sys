@@ -36,25 +36,29 @@ The **Classroom Seating Arrangement Algorithm** is a sophisticated constraint-ba
 
 ### System Components
 
-```
-┌─────────────────────────────────────┐
-│        Frontend (index.html)         │
-│   Tailwind CSS + Vanilla JavaScript  │
-└──────────┬──────────────────────────┘
-           │ JSON POST Requests
-           ▼
-┌─────────────────────────────────────┐
-│      Flask Backend (app.py)          │
-│   REST API Endpoints                 │
-└──────────┬──────────────────────────┘
-           │ Instantiates & Calls
-           ▼
-┌─────────────────────────────────────┐
-│  SeatingAlgorithm Core (algo.py)     │
-│  - Generation Logic                  │
-│  - Validation Logic                  │
-│  - Constraint Checking               │
-└─────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Frontend["🖥️ Frontend Layer"]
+        HTML["HTML Form<br/>Inputs"]
+        JS["Vanilla JavaScript<br/>+ Tailwind CSS"]
+    end
+    
+    subgraph API["⚙️ API Layer"]
+        Flask["Flask Backend<br/>REST API"]
+    end
+    
+    subgraph Algorithm["🔧 Algorithm Layer"]
+        Core["SeatingAlgorithm<br/>Core Engine"]
+        Classes["Data Classes<br/>Seat + PaperSet"]
+    end
+    
+    Frontend -->|JSON POST| API
+    API -->|Instantiate| Algorithm
+    Core -.-> Classes
+    
+    style Frontend fill:#e3f2fd
+    style API fill:#fff9c4
+    style Algorithm fill:#c8e6c9
 ```
 
 ### Core Classes
@@ -69,21 +73,19 @@ class PaperSet(Enum):
 - Alternates within blocks to avoid same paper adjacent
 
 #### 2. **Seat** (Dataclass)
-```python
-@dataclass
-class Seat:
-    row: int                          # Row position (0-indexed)
-    col: int                          # Column position (0-indexed)
-    batch: Optional[int]              # Batch number (1 to num_batches)
-    paper_set: Optional[PaperSet]     # A or B
-    block: Optional[int]              # Block number
-    roll_number: Optional[str]        # Assigned roll number or string
-    is_broken: bool = False           # Is seat unavailable?
-    color: str = "#FFFFFF"            # Hex color for display
-```
+
+| Field | Type | Description |
+|---|---|---|
+| `row` | `int` | Row position (0-indexed) |
+| `col` | `int` | Column position (0-indexed) |
+| `batch` | `Optional[int]` | Batch number (1 to num_batches) |
+| `paper_set` | `Optional[PaperSet]` | A or B |
+| `block` | `Optional[int]` | Block number |
+| `roll_number` | `Optional[str]` | Assigned roll number |
+| `is_broken` | `bool` | Is seat unavailable? |
+| `color` | `str` | Hex color for display |
 
 #### 3. **SeatingAlgorithm** (Main Class)
-Core engine that:
 - Generates seating arrangements
 - Validates constraints
 - Returns web-formatted data
@@ -99,28 +101,48 @@ The frontend collects inputs as **HTML form fields** which are sent as **JSON** 
 
 #### Basic Parameters
 
-| Field | Type | Format | Example | Required | Notes |
-|-------|------|--------|---------|----------|-------|
-| **rows** | number | integer | 8 | ✓ | Total classroom rows |
-| **cols** | number | integer | 10 | ✓ | Total classroom columns |
-| **num_batches** | number | integer | 3 | ✓ | Number of batches (1-10+) |
-| **block_width** | number | integer | 2 | ✓ | Columns per block |
-| **broken_seats** | string | CSV "row-col" | "1-1,1-2,2-3" | ✗ | Unavailable seats (1-indexed) |
+| Field | Type | Example | Required | Description |
+|-------|------|---------|----------|-------------|
+| `rows` | `int` | `8` | ✓ | Total classroom rows |
+| `cols` | `int` | `10` | ✓ | Total classroom columns |
+| `num_batches` | `int` | `3` | ✓ | Number of batches (1-10+) |
+| `block_width` | `int` | `2` | ✓ | Columns per block |
+| `broken_seats` | `str` | `"1-1,1-2,2-3"` | ✗ | Unavailable seats (CSV, 1-indexed) |
 
 #### Advanced Parameters
 
-| Field | Type | Format | Example | Required | Notes |
-|-------|------|--------|---------|----------|-------|
-| **batch_student_counts** | string | CSV "batch:count" | "1:10,2:8,3:7" | ✗ | Limit students per batch |
-| **start_rolls** | string | CSV "batch:roll" | "1:BTCS24O1001,2:BTCD24O2001" | ✗ | Custom start roll per batch |
-| **batch_prefixes** | string | CSV | "BTCS,BTCD,BTCE" | ✗ | Batch prefixes (if using template) |
-| **year** | number | integer | 2024 | ✗ | Year for roll template |
-| **roll_template** | string | template | "{prefix}{year}O{serial}" | ✗ | Roll number format |
-| **serial_width** | number | integer | 4 | ✗ | Zero-pad width for serial |
-| **batch_by_column** | boolean | true/false | true | ✓ | Batch-by-column assignment |
-| **enforce_no_adjacent_batches** | boolean | true/false | false | ✗ | Prevent adjacent same batch |
+| Field | Type | Example | Required | Description |
+|-------|------|---------|----------|-------------|
+| `batch_student_counts` | `str` | `"1:10,2:8,3:7"` | ✗ | Limit students per batch (CSV) |
+| `start_rolls` | `str` | `"1:BTCS24O1001,2:BTCD24O2001"` | ✗ | Custom start roll per batch |
+| `batch_prefixes` | `str` | `"BTCS,BTCD,BTCE"` | ✗ | Batch prefixes (if using template) |
+| `year` | `int` | `2024` | ✗ | Year for roll template |
+| `roll_template` | `str` | `"{prefix}{year}O{serial}"` | ✗ | Roll number format |
+| `serial_width` | `int` | `4` | ✗ | Zero-pad width for serial |
+| `batch_by_column` | `bool` | `true` | ✓ | Batch-by-column assignment |
+| `enforce_no_adjacent_batches` | `bool` | `false` | ✗ | Prevent adjacent same batch |
 
-### JSON Payload Format
+### Input Parsing Flow
+
+```mermaid
+graph LR
+    A["HTML Form"]
+    B["Numeric<br/>rows, cols, num_batches"]
+    C["Boolean<br/>batch_by_column"]
+    D["CSV Parse<br/>broken_seats → list"]
+    E["Dict Parse<br/>batch_student_counts → dict"]
+    F["Python Dict<br/>Ready for Algorithm"]
+    
+    A --> B --> F
+    A --> C --> F
+    A --> D --> F
+    A --> E --> F
+    
+    style A fill:#e3f2fd
+    style F fill:#c8e6c9
+```
+
+### JSON Payload Example
 
 ```json
 {
@@ -142,92 +164,88 @@ The frontend collects inputs as **HTML form fields** which are sent as **JSON** 
 
 ### Input Parsing (Backend)
 
-The backend (`app.py`) parses inputs as follows:
-
-```python
-# Numeric inputs (direct conversion)
-rows = int(data.get('rows', 10))
-cols = int(data.get('cols', 15))
-num_batches = int(data.get('num_batches', 3))
-block_width = int(data.get('block_width', 3))
-
-# Boolean inputs
-batch_by_column = bool(data.get('batch_by_column', True))
-enforce_no_adjacent_batches = bool(data.get('enforce_no_adjacent_batches', False))
-
-# CSV Parsing: "1-1,1-2,2-3" → List[(row, col), ...]
-broken_seats_str = data.get('broken_seats', '')
-broken_seats = []
-if broken_seats_str:
-    parts = [p.strip() for p in broken_seats_str.split(',')]
-    for part in parts:
-        row_col = part.split('-')
-        row = int(row_col[0].strip()) - 1  # Convert to 0-based
-        col = int(row_col[1].strip()) - 1
-        broken_seats.append((row, col))
-
-# Dict Parsing: "1:35,2:30,3:25" → {1: 35, 2: 30, 3: 25}
-batch_student_counts_str = data.get('batch_student_counts', '')
-batch_student_counts = {}
-if batch_student_counts_str:
-    parts = [p.strip() for p in batch_student_counts_str.split(',')]
-    for part in parts:
-        k, v = part.split(':')
-        batch_student_counts[int(k.strip())] = int(v.strip())
-```
+The backend (`app.py`) converts form data to Python objects:
 
 ---
 
 ## Algorithm Logic
 
-### Step-by-Step Execution Flow
+### Phase Breakdown
 
-#### **Phase 1: Initialization**
-
-```
-Input: rows, cols, num_batches, block_width, various constraints
-│
-├─ Calculate blocks = ceil(cols / block_width)
-├─ Store all configuration parameters
-├─ Parse batch templates from start_rolls
-├─ Set up batch colors (default or custom)
-└─ Create seating_plan matrix
-```
-
-#### **Phase 2: Batch Assignment to Columns**
-
-The algorithm uses **column-major batch assignment**:
-
-```
-Total Columns = 10, Batches = 3
-│
-├─ Base columns per batch = 10 ÷ 3 = 3
-├─ Remaining columns = 10 % 3 = 1
-│
-├─ Column Distribution:
-│  ├─ Batch 1: Columns 0, 3, 6, 9 (4 cols)
-│  ├─ Batch 2: Columns 1, 4, 7 (3 cols)
-│  └─ Batch 3: Columns 2, 5, 8 (3 cols)
-│
-└─ Formula: batch[col % num_batches]
-```
-
-#### **Phase 3: Seat Allocation**
-
-```
-For each column (col = 0 to cols-1):
-    batch_id = (col % num_batches) + 1
+```mermaid
+graph TD
+    A["🎯 Phase 1: Initialization"]
+    B["📊 Phase 2: Batch Assignment"]
+    C["🪑 Phase 3: Seat Allocation"]
+    D["📝 Phase 4: Roll Assignment"]
+    E["📋 Phase 5: Validation"]
     
-    For each row (row = 0 to rows-1):
-        seat_position = (row, col)
-        
-        If (row, col) in broken_seats:
-            Mark as BROKEN (red, no roll)
-        
-        Else if batch_allocated[batch_id] >= batch_limits[batch_id]:
-            Mark as UNALLOCATED (light gray, no roll)
-        
-        Else:
+    A --> B --> C --> D --> E
+    
+    A1["Calculate blocks<br/>Store parameters<br/>Parse templates<br/>Set colors"]
+    A --> A1
+    
+    B1["Distribute cols to batches<br/>Formula: col % num_batches<br/>Calculate per-batch capacity"]
+    B --> B1
+    
+    C1["Mark broken seats<br/>Mark unallocated<br/>Calculate paper sets<br/>Assign colors"]
+    C --> C1
+    
+    D1["Generate roll numbers<br/>Apply formatting<br/>Handle per-batch limits"]
+    D --> D1
+    
+    E1["Check 7 constraints<br/>Build error list<br/>Return validation result"]
+    E --> E1
+    
+    style A fill:#e3f2fd
+    style B fill:#fff9c4
+    style C fill:#f3e5f5
+    style D fill:#e8f5e9
+    style E fill:#fff3e0
+```
+
+### Column-Based Batch Assignment
+
+```mermaid
+graph LR
+    A["10 Columns<br/>3 Batches"]
+    B["Base: 10÷3=3<br/>Rem: 10%3=1"]
+    C["Batch 1: 3+1=4<br/>Batch 2: 3<br/>Batch 3: 3"]
+    D["Batch 1: [0,3,6,9]<br/>Batch 2: [1,4,7]<br/>Batch 3: [2,5,8]"]
+    
+    A --> B --> C --> D
+    
+    style D fill:#c8e6c9
+```
+
+### Seat Allocation Decision Tree
+
+```mermaid
+graph TD
+    A["🪑 Process Seat<br/>row, col"]
+    B{"Is Broken<br/>Seat?"}
+    C["🔴 Mark BROKEN<br/>Color: Red<br/>Roll: None"]
+    D{"Batch Limit<br/>Reached?"}
+    E["⚪ Mark UNALLOCATED<br/>Color: Gray<br/>Roll: None"]
+    F{"Roll<br/>Available?"}
+    G["🟢 Mark ALLOCATED<br/>Assign Roll<br/>Paper Set A/B"]
+    H["⚪ Mark UNALLOCATED<br/>Exhausted"]
+    
+    A --> B
+    B -->|YES| C
+    B -->|NO| D
+    D -->|YES| E
+    D -->|NO| F
+    F -->|YES| G
+    F -->|NO| H
+    
+    style C fill:#ffcdd2
+    style E fill:#f3f3f3
+    style G fill:#c8e6c9
+    style H fill:#f3f3f3
+```
+
+### Seat Allocation Processing
             Assign roll number from batch_id
             Assign paper set (A/B alternating)
             Assign color (batch-specific)
@@ -865,67 +883,49 @@ data.constraints_status.constraints.forEach(c => {
 
 ### 7 Built-in Constraints
 
-#### 1. **Broken Seats Handling**
-- **Description**: Marks seats as unavailable (broken/damaged)
-- **Implementation**: Marks with `is_broken=True` and red color
-- **Validation**: Verifies all broken seats are properly marked
-
-#### 2. **Batch Student Counts**
-- **Description**: Limits allocation per batch
-- **Implementation**: Stops allocating to batch when limit reached
-- **Validation**: Ensures no batch exceeds its limit
-
-#### 3. **Block Width Enforcement**
-- **Description**: Organizes seats into blocks of specified width
-- **Implementation**: `block_id = col // block_width`
-- **Validation**: Checks block count = ceil(cols / block_width)
-
-#### 4. **Paper Set Alternation**
-- **Description**: Ensures A/B papers alternate within blocks
-- **Implementation**: Alternates based on (row + col) % 2
-- **Validation**: Checks no adjacent seats have same paper
-
-#### 5. **Batch-by-Column Assignment**
-- **Description**: Each column assigned to single batch
-- **Implementation**: `batch_id = (col % num_batches) + 1`
-- **Validation**: Verifies each column has single batch
-
-#### 6. **No Adjacent Same Batch**
-- **Description**: Adjacent seats have different batches (optional)
-- **Implementation**: Check all horizontal & vertical neighbors
-- **Validation**: Enabled if `enforce_no_adjacent_batches=True`
-
-#### 7. **Unallocated Seats Handling**
-- **Description**: Marks unallocated seats (no student assigned)
-- **Implementation**: `is_unallocated=True` with light gray color
-- **Validation**: Always satisfied if handled correctly
+| # | Name | Description | Implementation | Applied When |
+|---|---|---|---|---|
+| 1️⃣ | Broken Seats | Marks unavailable seats | `is_broken=True`, Red color | broken_seats provided |
+| 2️⃣ | Batch Limits | Limits per-batch students | Stop at limit, mark unallocated | batch_student_counts provided |
+| 3️⃣ | Block Width | Organizes into blocks | `block_id = col // block_width` | Always |
+| 4️⃣ | Paper Sets | Alternates A/B papers | Check (row+col) % 2 | Always |
+| 5️⃣ | Column-Batch | Single batch per column | `batch_id = col % num_batches` | Always |
+| 6️⃣ | Adjacent Batches | No adjacent same batch | Check neighbors | `enforce_no_adjacent_batches=true` |
+| 7️⃣ | Unallocated | Mark unallocated seats | `is_unallocated=True`, Gray color | Always |
 
 ### Constraint Validation Flow
 
-```
-Input Parameters
-      ↓
-Generate Seating
-      ↓
-Check Each Constraint:
-  ├─ Broken seats marked correctly?
-  ├─ Batch limits respected?
-  ├─ Blocks correctly structured?
-  ├─ Paper sets alternate?
-  ├─ Columns have single batch?
-  ├─ No adjacent same batch? (if enabled)
-  └─ Unallocated seats marked?
-      ↓
-Return Validation Result:
-  {
-    "is_valid": boolean,
-    "errors": [list of error messages],
-    "constraints_status": {
-      "constraints": [...],
-      "total_satisfied": int,
-      "total_applied": int
-    }
-  }
+```mermaid
+flowchart TD
+    A["📥 Input Parameters"]
+    B["🎲 Generate Seating"]
+    C["✔️ Constraint 1:<br/>Broken Seats"]
+    D{"✅ Pass?"}
+    E["✔️ Constraint 2:<br/>Batch Limits"]
+    F{"✅ Pass?"}
+    G["✔️ Constraint 3:<br/>Block Width"]
+    H["✔️ Constraint 4:<br/>Paper Sets"]
+    I["✔️ Constraint 5:<br/>Column-Batch"]
+    J["✔️ Constraint 6:<br/>Adjacent Batch"]
+    K["✔️ Constraint 7:<br/>Unallocated"]
+    L["📊 Generate Report"]
+    M{"✅ All<br/>Passed?"}
+    N["✅ VALID"]
+    O["❌ INVALID<br/>with errors"]
+    
+    A --> B --> C --> D
+    D -->|FAIL| O
+    D -->|PASS| E --> F
+    F -->|FAIL| O
+    F -->|PASS| G --> H --> I --> J --> K
+    K --> L --> M
+    M -->|YES| N
+    M -->|NO| O
+    N --> L
+    O --> L
+    
+    style N fill:#c8e6c9
+    style O fill:#ffcdd2
 ```
 
 ---
