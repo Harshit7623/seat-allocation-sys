@@ -1049,4 +1049,4 @@ For issues, questions, or feature requests:
 
 **Document Version**: 1.0  
 **Last Updated**: November 19, 2025  
-**Maintained By**: Classroom Seating Algorithm Team
+**Maintained By**: SAS Development Team 
