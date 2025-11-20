@@ -881,17 +881,53 @@ data.constraints_status.constraints.forEach(c => {
 
 ## Constraint System
 
-### 7 Built-in Constraints
+### 8 Built-in Constraints (with 3-Tier Priority for Paper Sets)
 
-| # | Name | Description | Implementation | Applied When |
-|---|---|---|---|---|
-| 1️⃣ | Broken Seats | Marks unavailable seats | `is_broken=True`, Red color | broken_seats provided |
-| 2️⃣ | Batch Limits | Limits per-batch students | Stop at limit, mark unallocated | batch_student_counts provided |
-| 3️⃣ | Block Width | Organizes into blocks | `block_id = col // block_width` | Always |
-| 4️⃣ | Paper Sets | Alternates A/B papers | Check (row+col) % 2 | Always |
-| 5️⃣ | Column-Batch | Single batch per column | `batch_id = col % num_batches` | Always |
-| 6️⃣ | Adjacent Batches | No adjacent same batch | Check neighbors | `enforce_no_adjacent_batches=true` |
-| 7️⃣ | Unallocated | Mark unallocated seats | `is_unallocated=True`, Gray color | Always |
+| # | Name | Description | Implementation | Applied When | Priority |
+|---|---|---|---|---|---|
+| 1️⃣ | Broken Seats | Marks unavailable seats | `is_broken=True`, Red color | broken_seats provided | — |
+| 2️⃣ | Batch Limits | Limits per-batch students | Stop at limit, mark unallocated | batch_student_counts provided | — |
+| 3️⃣ | Block Width | Organizes into blocks | `block_id = col // block_width` | Always | — |
+| 4️⃣ | Paper Sets (3-Tier) | Alternates A/B papers with priority system | See below | Always | P1→P2→P3 |
+| 5️⃣ | Column-Batch | Single batch per column | `batch_id = col % num_batches` | Always | — |
+| 6️⃣ | Adjacent Batches | No adjacent same batch | Check neighbors | `enforce_no_adjacent_batches=true` | — |
+| 7️⃣ | Unallocated | Mark unallocated seats | `is_unallocated=True`, Gray color | Always | — |
+
+### Paper Set Assignment: 3-Tier Priority System (NEW in v2.1)
+
+The paper set assignment now uses a 3-tier constraint priority system to handle same-batch student paper allocation:
+
+#### Priority Level 1 (HIGHEST): Vertical Same-Batch Alternation
+- **Rule**: When a seat has a student from batch B in the row above, assign a **different paper set**
+- **Rationale**: Prevents vertical columns from having same-batch students with identical papers
+- **Example**: 
+  - Row 1, Col 1: Batch 1 → Paper A
+  - Row 2, Col 1: Batch 1 → Paper B (forced alternation)
+
+#### Priority Level 2 (MEDIUM): Horizontal Same-Batch Different Papers
+- **Rule**: When a seat has same-batch students in the same row/block, assign **different paper sets**
+- **Rationale**: Ensures students sitting together from same batch have different papers
+- **Example**:
+  - Row 1, Col 1: Batch 1 → Paper A
+  - Row 1, Col 2: Batch 1 → Paper B (forced different)
+
+#### Priority Level 3 (LOWEST): General Paper Alternation
+- **Rule**: Default alternation pattern based on position for students from different batches
+- **Rationale**: Maintains general A/B alternation when priorities 1 & 2 don't apply
+- **Example**:
+  - Row 1, Col 1: Batch 1 → Paper A
+  - Row 1, Col 3: Batch 2 → Paper B (standard alternation)
+
+#### Priority Resolution Algorithm
+```
+if (seat_above exists AND same batch) {
+    assign_opposite_paper_set();  // Priority 1
+} else if (seat_left exists AND same batch in row) {
+    assign_opposite_paper_set();  // Priority 2
+} else {
+    apply_standard_alternation();  // Priority 3
+}
+```
 
 ### Constraint Validation Flow
 
@@ -904,7 +940,7 @@ flowchart TD
     E["✔️ Constraint 2:<br/>Batch Limits"]
     F{"✅ Pass?"}
     G["✔️ Constraint 3:<br/>Block Width"]
-    H["✔️ Constraint 4:<br/>Paper Sets"]
+    H["✔️ Constraint 4:<br/>Paper Sets<br/>(3-Tier Priority)"]
     I["✔️ Constraint 5:<br/>Column-Batch"]
     J["✔️ Constraint 6:<br/>Adjacent Batch"]
     K["✔️ Constraint 7:<br/>Unallocated"]
@@ -912,18 +948,22 @@ flowchart TD
     M{"✅ All<br/>Passed?"}
     N["✅ VALID"]
     O["❌ INVALID<br/>with errors"]
+    P["(P1→P2→P3)"]
     
     A --> B --> C --> D
     D -->|FAIL| O
     D -->|PASS| E --> F
     F -->|FAIL| O
     F -->|PASS| G --> H --> I --> J --> K
+    H --> P
     K --> L --> M
     M -->|YES| N
     M -->|NO| O
     N --> L
     O --> L
     
+    style P fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    style H fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
     style N fill:#c8e6c9
     style O fill:#ffcdd2
 ```
@@ -1047,6 +1087,6 @@ For issues, questions, or feature requests:
 
 ---
 
-**Document Version**: 1.0  
+**Document Version**: 2.1 (Added 3-Tier Priority Paper Set System)  
 **Last Updated**: November 19, 2025  
 **Maintained By**: SAS Development Team 

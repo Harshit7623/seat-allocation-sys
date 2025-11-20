@@ -198,7 +198,7 @@ graph TD
     A["🔍 Seating Generation Complete"]
     B["📋 Call validate_constraints"]
     C{"Constraint 1:<br/>Broken Seats?"}
-    D{"Constraint 2:<br/>Paper Set<br/>Alternation?"}
+    D{"Constraint 2:<br/>Paper Set<br/>Alternation<br/>(3-Tier Priority)?"}
     E{"Constraint 3:<br/>No Duplicate<br/>Roll Numbers?"}
     F{"Constraint 4:<br/>Batch Limits<br/>Respected?"}
     G{"Constraint 5:<br/>Column-Batch<br/>Mapping?"}
@@ -207,12 +207,14 @@ graph TD
     J["✅ All Pass"]
     K["❌ Errors Found"]
     L["📤 Return Result"]
+    P["P1: Vertical<br/>Same-Batch<br/>P2: Horizontal<br/>Same-Batch<br/>P3: General"]
     
     A --> B --> C
     C -->|PASS| D
     C -->|FAIL| K
     D -->|PASS| E
     D -->|FAIL| K
+    D -.-> P
     E -->|PASS| F
     E -->|FAIL| K
     F -->|PASS| G
@@ -229,17 +231,27 @@ graph TD
     style J fill:#c8e6c9
     style K fill:#ffccbc
     style L fill:#e1f5fe
+    style D fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
+    style P fill:#fff9c4,stroke:#f57f17,stroke-width:2px
 ```
 
-| Constraint # | Name | Description | Validation |
-|---|---|---|---|
-| 1 | Broken Seats | All configured broken seats marked as broken | ✓ Check each |
-| 2 | Paper Set Alternation | Adjacent seats have different paper sets | ✓ Check neighbors |
-| 3 | No Duplicate Rolls | All roll numbers unique (except None) | ✓ Set check |
-| 4 | Batch Limits | Allocated ≤ limit per batch | ✓ Count check |
-| 5 | Column-Batch Mapping | Column contains only one batch | ✓ Verify columns |
-| 6 | Block Structure | Blocks = ⌈cols / block_width⌉ | ✓ Calculate |
-| 7 | Adjacent Batches | (Optional) No adjacent same batch | ✓ Check neighbors |
+| Constraint # | Name | Description | Validation | Priority System |
+|---|---|---|---|---|
+| 1 | Broken Seats | All configured broken seats marked as broken | ✓ Check each | — |
+| 2 | Paper Set Alternation | Adjacent seats with 3-tier priority | ✓ Check neighbors | **P1→P2→P3** |
+| 3 | No Duplicate Rolls | All roll numbers unique (except None) | ✓ Set check | — |
+| 4 | Batch Limits | Allocated ≤ limit per batch | ✓ Count check | — |
+| 5 | Column-Batch Mapping | Column contains only one batch | ✓ Verify columns | — |
+| 6 | Block Structure | Blocks = ⌈cols / block_width⌉ | ✓ Calculate | — |
+| 7 | Adjacent Batches | (Optional) No adjacent same batch | ✓ Check neighbors | — |
+
+### Paper Set Constraint: 3-Tier Priority Explanation
+
+- **P1 (Priority 1 - Highest)**: If student above is same batch → Assign different paper
+- **P2 (Priority 2 - Medium)**: Else if student left is same batch → Assign different paper  
+- **P3 (Priority 3 - Lowest)**: Else apply standard alternation pattern
+
+This ensures same-batch students get different papers when vertically or horizontally adjacent.
 
 ---
 
@@ -490,6 +502,6 @@ graph TB
 
 ---
 
-**Document Version**: 1.0  
+**Document Version**: 2.1 (Added 3-Tier Priority Paper Set System)  
 **Last Updated**: November 19, 2025  
 **Maintained By**: SAS Development Team 

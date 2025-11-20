@@ -244,6 +244,6 @@ graph TB
 
 ---
 
-**Documentation Version**: 2.0 (Updated with Mermaid & Tables)  
+**Documentation Version**: 2.1 (Updated with 3-Tier Priority Constraint Diagrams)  
 **Last Updated**: November 19, 2025  
 **Maintained By**: SAS Development Team 

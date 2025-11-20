@@ -440,6 +440,61 @@ graph LR
 
 ---
 
+## Paper Set Constraint: 3-Tier Priority Examples (NEW in v2.1)
+
+### Priority System for Same-Batch Students
+
+When multiple students from the same batch are placed adjacent (horizontally or vertically), the system uses this priority:
+
+#### Example 1: Priority 1 - Vertical Same-Batch Alternation
+
+```
+Column A    Column B
+┌────┐     ┌────┐
+│ B1 │     │ B2 │
+│ A  │     │ B  │    ← Different papers (A vs B)
+├────┤     ├────┤
+│ B1 │     │ ... │    ← Priority 1 applies:
+│ B  │     │    │       Same batch above (B1),
+└────┘     └────┘       so assign different paper
+```
+
+- **Row 0, Col 0**: Batch 1 → Paper A
+- **Row 1, Col 0**: Batch 1 → Paper B (forced different due to Priority 1)
+
+#### Example 2: Priority 2 - Horizontal Same-Batch Different Papers
+
+```
+Row 0: │ B1 │ B1 │ B2 │
+Seats: │ A  │ B  │ A  │
+              ↑
+        Priority 2 applies:
+        Same batch left (B1),
+        so assign different paper
+```
+
+- **Row 0, Col 0**: Batch 1 → Paper A
+- **Row 0, Col 1**: Batch 1 → Paper B (forced different due to Priority 2)
+- **Row 0, Col 2**: Batch 2 → Paper A (different batch, standard alternation)
+
+#### Example 3: Priority 3 - General Alternation
+
+```
+Row 0: │ B1 │ B2 │ B1 │ B2 │
+Seats: │ A  │ B  │ A  │ B  │
+
+Priority 3 applies:
+- No same-batch vertical/horizontal adjacency
+- Standard alternation pattern continues
+```
+
+- **Row 0, Col 0**: Batch 1 → Paper A
+- **Row 0, Col 1**: Batch 2 → Paper B (standard alternation)
+- **Row 0, Col 2**: Batch 1 → Paper A (standard alternation)
+- **Row 0, Col 3**: Batch 2 → Paper B (standard alternation)
+
+---
+
 ## Color Reference
 
 | Batch | Color Code | Hex Value | Usage |
@@ -583,6 +638,6 @@ graph TB
 ---
 
 **For complete documentation, see `ALGORITHM_DOCUMENTATION.md`**  
-**Documentation Version**: 2.0 (Updated with Mermaid & Tables)  
+**Documentation Version**: 2.1 (Added 3-Tier Priority Paper Set Examples)  
 **Last Updated**: November 19, 2025  
 **Maintained By**: SAS Development Team 

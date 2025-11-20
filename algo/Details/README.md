@@ -6,12 +6,13 @@
 
 ##  Documentation Files
 
-### 1. **ALGORITHM_DOCUMENTATION.md** (25KB)
+### 1. **ALGORITHM_DOCUMENTATION.md** (28KB)
 **Complete Technical Reference**
 - System architecture and components 
 - Detailed input/output format specifications
 - Step-by-step algorithm logic (5 phases)
-- 7 built-in constraints explained
+- **8 built-in constraints with 3-tier priority system (NEW v2.1)**
+- **Paper set assignment: Priority-based same-batch handling (NEW v2.1)**
 - API endpoints and payload formats
 - 4 comprehensive examples with JSON
 - React/Vue/Angular integration guides
@@ -28,15 +29,15 @@
 
 ---
 
-### 2. **ARCHITECTURE.md** (13KB)
+### 2. **ARCHITECTURE.md** (14KB)
 **System Design & Data Flow**
 - High-level architecture with 3 layers
 - Complete data flow from input to output
 - Seating generation algorithm (column-based)
 - Input parsing flow
 - Output generation flow
-- 7 constraint validation process
-- PDF export workflow
+- **7 constraint validation process with 3-tier priority diagram (NEW v2.1)**
+- PDF export workflow with responsive grid layout (improved)
 - UML class relationships
 - Seat state transitions
 - Performance analysis (time & space complexity)
@@ -54,7 +55,7 @@
 
 ---
 
-### 3. **QUICK_REFERENCE.md** (14KB)
+### 3. **QUICK_REFERENCE.md** (18KB)
 **Developer Quick Start Guide**
 - 5-minute backend setup
 - Simple API call examples
@@ -62,6 +63,8 @@
 - 5 common workflows
 - React/Vue/Angular component examples
 - Input format transformations
+- **3-tier priority constraint examples (NEW v2.1)**
+- **Same-batch paper set assignment patterns (NEW v2.1)**
 - Color reference guide
 - Systematic debugging workflow
 - Performance benchmarks
@@ -168,11 +171,14 @@ Column-Based Batch Assignment:
 - Validate after generation
 ```
 
-### Constraints (7 types)
+### Constraints (8 types with 3-tier priority)
 1. Broken seats handling
 2. Batch student counts
 3. Block width enforcement
-4. Paper set alternation
+4. **Paper set alternation with 3-tier priority (NEW v2.1)**
+   - **P1**: Vertical same-batch alternation (highest priority)
+   - **P2**: Horizontal same-batch different papers (medium priority)
+   - **P3**: General horizontal/vertical alternation (lowest priority)
 5. Batch-by-column assignment
 6. No adjacent same batch (optional)
 7. Unallocated seats handling
@@ -276,3 +282,4 @@ This documentation suite is designed to make your development experience smooth 
 **Location**: `/home/blazex/Documents/git/seat-allocation-sys/algo/Details/`  
 **For Questions**: Refer to VISUAL_INDEX.md for navigation.  
 **Maintained By**: SAS Development Team  
+**Documentation Version**: 2.1 (3-Tier Priority Constraint System)  
