@@ -1,3 +1,4 @@
+// frontend/src/pages/UploadPage.jsx
 import React, { useState, useEffect, useRef } from "react";
 
 /**
