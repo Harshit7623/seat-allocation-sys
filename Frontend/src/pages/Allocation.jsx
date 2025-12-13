@@ -107,7 +107,13 @@ const AllocationPage = ({ showToast }) => {
       broken_seats: brokenSeats,
       batch_student_counts: batchStudentCounts,
       batch_colors: batchColorsInput,
-      start_rolls: start_rolls_entries,
+      start_rolls: Object.keys(batchStartRolls).length
+        ? Object.fromEntries(
+            Object.entries(batchStartRolls)
+                .filter(([, v]) => v && String(v).trim() !== "")
+                .map(([k, v]) => [parseInt(k, 10), String(v).trim()])
+            )
+        : undefined,
       serial_mode: serialMode,
       serial_width: serialWidth || 0,
       use_demo_db: useDemoDb,
