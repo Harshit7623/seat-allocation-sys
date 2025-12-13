@@ -45,6 +45,8 @@ const AllocationPage = () => {
   const [batchColorsInput, setBatchColorsInput] = useState(""); // "1:#DBEAFE,2:#DCFCE7"
   const [serialMode, setSerialMode] = useState("per_batch");
   const [serialWidth, setSerialWidth] = useState(0);
+  const [batchByColumn, setBatchByColumn] = useState(true);
+  const [enforceNoAdjacentBatches, setEnforceNoAdjacentBatches] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [webData, setWebData] = useState(null);
@@ -100,8 +102,8 @@ const AllocationPage = () => {
       cols,
       num_batches: numBatches,
       block_width: blockWidth,
-      batch_by_column: true,
-      enforce_no_adjacent_batches: false,
+      batch_by_column: batchByColumn,
+      enforce_no_adjacent_batches: enforceNoAdjacentBatches,
       broken_seats: brokenSeats,
       batch_student_counts: batchStudentCounts,
       batch_colors: batchColorsInput,
@@ -180,7 +182,7 @@ const AllocationPage = () => {
       return (
         <div
           key={`${rIdx}-${cIdx}`}
-          className="p-2 border rounded bg-gray-50 flex flex-col items-center justify-center text-xs"
+          className="p-2 border rounded bg-gray-50 flex flex-col items-center justify-center text-xs min-h-[84px] min-w-[84px]"
         >
           &nbsp;
         </div>
@@ -190,25 +192,40 @@ const AllocationPage = () => {
       return (
         <div
           key={`${rIdx}-${cIdx}`}
-          className="p-2 min-w-[84px] min-h-[84px] rounded-lg flex flex-col items-center justify-center text-xs border-2 border-red-400 bg-red-100"
+          className="p-3 min-w-[84px] min-h-[84px] rounded-lg flex flex-col items-center justify-center text-xs border-2 border-red-400 bg-red-100 shadow-md transition-all duration-200 overflow-hidden"
         >
-          <div className="font-bold text-xs text-red-800">BROKEN</div>
+          <div className="font-bold text-red-800 text-sm">BROKEN</div>
           <div className="text-[10px] text-red-700 mt-1">{seat.position}</div>
+        </div>
+      );
+    }
+    if (seat.is_unallocated) {
+      return (
+        <div
+          key={`${rIdx}-${cIdx}`}
+          className="p-3 min-w-[84px] min-h-[84px] rounded-lg flex flex-col items-center justify-center text-xs border border-gray-300 bg-gray-100 shadow-md transition-all duration-200 overflow-hidden"
+        >
+          <div className="font-semibold text-gray-600 text-sm">Batch {seat.batch}</div>
+          <div className="font-bold text-gray-500 text-sm">UNALLOCATED</div>
+          <div className="text-[10px] text-gray-500">{seat.position}</div>
         </div>
       );
     }
     const color = seat.color || "#ffffff";
     const label = seat.batch_label || (seat.batch ? `Batch ${seat.batch}` : "");
-    const display = seat.display || (seat.roll_number ? `${seat.roll_number}${seat.paper_set || ""}` : "UNALLOCATED");
+    const rn = seat.roll_number || "";
+    const set = seat.paper_set || "";
+    const display = seat.display || (rn ? `${rn}${set}` : "UNALLOCATED");
     return (
       <div
         key={`${rIdx}-${cIdx}`}
-        className="p-2 min-w-[84px] min-h-[84px] rounded-lg flex flex-col items-center justify-center text-xs border"
+        className="p-3 min-w-[84px] min-h-[84px] rounded-lg flex flex-col items-center justify-center text-xs border border-gray-300 shadow-md transition-all duration-200 overflow-hidden"
         style={{ background: color }}
       >
-        <div className="text-[11px] font-semibold">{label}</div>
-        <div className="text-sm font-bold break-words text-center">{display}</div>
-        <div className="text-[10px] opacity-80 mt-1">{seat.position}</div>
+        <div className="text-[11px] font-semibold text-center">{label}</div>
+        <div className="text-sm font-bold break-words text-center mt-1">{rn}</div>
+        {set && <div className="text-[10px] opacity-80 mt-1">Set: {set}</div>}
+        <div className="text-[10px] opacity-70 mt-1">{seat.position}</div>
       </div>
     );
   }
@@ -219,11 +236,14 @@ const AllocationPage = () => {
     const container = document.createElement("div");
     container.style.padding = "12px";
     container.style.fontFamily = "Inter, Arial, sans-serif";
+    
     // title
     const h = document.createElement("h3");
     h.innerText = "Seating Arrangement";
     h.style.textAlign = "center";
     h.style.marginBottom = "8px";
+    h.style.fontSize = "18px";
+    h.style.fontWeight = "bold";
     container.appendChild(h);
 
     // info line
@@ -231,7 +251,7 @@ const AllocationPage = () => {
     info.style.textAlign = "center";
     info.style.fontSize = "12px";
     info.style.marginBottom = "10px";
-    info.innerText = `Rows: ${rows} | Cols: ${cols} | Generated: ${new Date().toLocaleString()}`;
+    info.innerText = `Rows: ${rows} | Cols: ${cols} | Batches: ${numBatches} | Generated: ${new Date().toLocaleString()}`;
     container.appendChild(info);
 
     // grid
@@ -260,7 +280,7 @@ const AllocationPage = () => {
       if (s.is_broken) {
         seatEl.innerHTML = `<div style="font-weight:bold;color:#8B0000">BROKEN</div><div style="font-size:9px;color:#800000">${s.position}</div>`;
       } else if (s.is_unallocated) {
-        seatEl.innerHTML = `<div style="font-weight:600;color:#666">Batch ${s.batch || ""}</div><div style="font-weight:bold;color:#444">UNALLOCATED</div>`;
+        seatEl.innerHTML = `<div style="font-weight:600;color:#666">Batch ${s.batch || ""}</div><div style="font-weight:bold;color:#444">UNALLOC</div>`;
       } else {
         const setVal = s.paper_set ? s.paper_set : "";
         const roll = s.roll_number ? s.roll_number : "";
@@ -294,7 +314,7 @@ const AllocationPage = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           <div className="lg:col-span-2 bg-white rounded-xl shadow p-6">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Rows</label>
                 <input type="number" className="mt-1 w-full p-2 border rounded" value={rows} onChange={(e)=>setRows(Math.max(1, parseInt(e.target.value||1)))} />
@@ -312,54 +332,91 @@ const AllocationPage = () => {
                 <input type="number" className="mt-1 w-full p-2 border rounded" value={blockWidth} onChange={(e)=>setBlockWidth(Math.max(1, parseInt(e.target.value||1)))} />
               </div>
 
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700">Broken seats (row-col)</label>
+              <div className="col-span-1 md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Broken Seats (row-col)</label>
                 <input type="text" className="mt-1 w-full p-2 border rounded" placeholder="e.g., 1-3,2-1" value={brokenSeats} onChange={(e)=>setBrokenSeats(e.target.value)} />
                 <p className="text-xs text-gray-500 mt-1">Separate entries with commas; rows/cols are 1-based.</p>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Batch Student Counts (optional)</label>
+              <div className="col-span-1 md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Batch Student Counts (optional)</label>
                 <input type="text" className="mt-1 w-full p-2 border rounded" placeholder="1:35,2:30,3:25" value={batchStudentCounts} onChange={(e)=>setBatchStudentCounts(e.target.value)} />
+                <p className="text-xs text-gray-500 mt-1">Format: batchIndex:count, separated by commas. Shows unallocated if total &lt; available seats</p>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Batch Colors (optional)</label>
-                <input type="text" className="mt-1 w-full p-2 border rounded" placeholder="1:#DBEAFE,2:#DCFCE7" value={batchColorsInput} onChange={(e)=>setBatchColorsInput(e.target.value)} />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Start Rolls (per batch, optional)</label>
-                <div className="mt-1 grid grid-cols-2 gap-2">
-                  {Array.from({length:numBatches}).map((_,i)=> {
-                    const idx = i+1;
+              <div className="col-span-1 md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Per-batch Start Roll Strings (optional)</label>
+                <div className="space-y-2">
+                  {Array.from({ length: numBatches }).map((_, i) => {
+                    const idx = i + 1;
                     return (
-                      <input key={idx} type="text" className="p-2 border rounded" placeholder={`B${idx} start`} value={batchStartRolls[idx]||""} onChange={(e)=>setBatchStartRolls(prev=>({...prev,[idx]:e.target.value}))} />
+                      <div key={idx}>
+                        <label className="text-xs text-gray-600">Batch {idx}</label>
+                        <input
+                          type="text"
+                          className="w-full p-2 border rounded"
+                          placeholder={`e.g., BTCS24O${1000 + (idx - 1) * 100}`}
+                          value={batchStartRolls[idx] || ""}
+                          onChange={(e) => setBatchStartRolls((prev) => ({ ...prev, [idx]: e.target.value }))}
+                        />
+                      </div>
                     );
                   })}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Optional per-batch start roll strings (overrides auto serials)</p>
+                <p className="text-xs text-gray-500 mt-2">Format: batchIndex:ROLLSTRING, separated by commas. Example: 1:BTCS24O1135,2:BTCD24O2001</p>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Batch Labels (optional)</label>
-                <input type="text" className="mt-1 w-full p-2 border rounded" placeholder="1:CSE,2:ECE" value={batchLabelsInput} onChange={(e)=>setBatchLabelsInput(e.target.value)} />
-                <p className="text-xs text-gray-500 mt-1">Human readable branch names</p>
+              <div className="col-span-1 md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Batch Colors (optional)</label>
+                <input type="text" className="mt-1 w-full p-2 border rounded" placeholder="1:#DBEAFE,2:#DCFCE7" value={batchColorsInput} onChange={(e)=>setBatchColorsInput(e.target.value)} />
+                <p className="text-xs text-gray-500 mt-1">Format: batchIndex:#HEXCOLOR, separated by commas</p>
               </div>
+
+              <div className="col-span-1 md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Batch Labels (optional)</label>
+                <input type="text" className="mt-1 w-full p-2 border rounded" placeholder="1:CSE,2:ECE,3:IT" value={batchLabelsInput} onChange={(e)=>setBatchLabelsInput(e.target.value)} />
+                <p className="text-xs text-gray-500 mt-1">Human readable branch names. Format: batchIndex:LABEL</p>
+              </div>
+
+              <div className="col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Fill Batches By Column</label>
+                <div className="flex items-center gap-3">
+                  <input type="checkbox" checked={batchByColumn} onChange={(e)=>setBatchByColumn(e.target.checked)} className="h-5 w-5" />
+                  <span className="text-sm text-gray-600">Column-major assignment</span>
+                </div>
+              </div>
+
+              <div className="col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Enforce No Adjacent Same Batch</label>
+                <div className="flex items-center gap-3">
+                  <input type="checkbox" checked={enforceNoAdjacentBatches} onChange={(e)=>setEnforceNoAdjacentBatches(e.target.checked)} className="h-5 w-5" />
+                  <span className="text-sm text-gray-600">Optional constraint</span>
+                </div>
+              </div>
+
+              <div className="col-span-1 md:col-span-2 mt-4">
+                <div className="flex gap-3 flex-wrap">
+                  <button onClick={generate} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-medium transition"> 
+                    {loading ? "Generating..." : "Generate Chart"}
+                  </button>
+                  <button onClick={downloadPdf} className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded font-medium transition" disabled={!webData}>
+                    Download PDF
+                  </button>
+                  <button onClick={showConstraints} className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded font-medium transition">
+                    View Constraints
+                  </button>
+                </div>
+              </div>
+
+              <div className="col-span-1 md:col-span-2">
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={useDemoDb} onChange={(e)=>setUseDemoDb(e.target.checked)} className="h-5 w-5" />
+                  <span className="text-sm text-gray-700">Use demo DB for enrollments/labels</span>
+                </label>
+              </div>
+
+              {error && <div className="col-span-1 md:col-span-2 mt-2 text-red-600 font-medium text-sm">{error}</div>}
             </div>
-
-            <div className="mt-6 flex gap-3 flex-wrap">
-              <button onClick={generate} disabled={loading} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded"> {loading ? "Generating..." : "Generate Chart"}</button>
-              <button onClick={downloadPdf} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded" disabled={!webData}>Download PDF</button>
-              <button onClick={showConstraints} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded">View Constraints</button>
-
-              <label className="ml-3 inline-flex items-center gap-2">
-                <input type="checkbox" checked={useDemoDb} onChange={(e)=>setUseDemoDb(e.target.checked)} />
-                <span className="text-sm text-gray-700">Use demo DB for enrollments/labels</span>
-              </label>
-            </div>
-
-            {error && <div className="mt-4 text-red-600 font-medium">{error}</div>}
 
           </div>
 
@@ -401,29 +458,47 @@ const AllocationPage = () => {
               </div>
 
               {/* Summary */}
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-3 bg-gray-50 rounded">
-                  <strong>Total Available Seats:</strong>
-                  <div>{webData.summary.total_available_seats ?? "-"}</div>
+              <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="p-3 bg-gray-50 rounded border">
+                  <strong className="text-gray-700">Total Available Seats:</strong>
+                  <div className="text-lg font-bold text-gray-900">{webData.summary.total_available_seats ?? "-"}</div>
                 </div>
-                <div className="p-3 bg-gray-50 rounded">
-                  <strong>Allocated Students:</strong>
-                  <div>{webData.summary.total_allocated_students ?? "-"}</div>
+                <div className="p-3 bg-gray-50 rounded border">
+                  <strong className="text-gray-700">Allocated Students:</strong>
+                  <div className="text-lg font-bold text-gray-900">{webData.summary.total_allocated_students ?? "-"}</div>
                 </div>
-                <div className="p-3 bg-gray-50 rounded">
-                  <strong>Broken Seats:</strong>
-                  <div>{webData.summary.broken_seats_count ?? 0}</div>
+                <div className="p-3 bg-gray-50 rounded border">
+                  <strong className="text-gray-700">Broken Seats:</strong>
+                  <div className="text-lg font-bold text-gray-900">{webData.summary.broken_seats_count ?? 0}</div>
+                </div>
+                <div className="p-3 bg-gray-50 rounded border">
+                  <strong className="text-gray-700">Unallocated:</strong>
+                  <div className="text-lg font-bold text-gray-900">{(webData.summary.total_available_seats ?? 0) - (webData.summary.total_allocated_students ?? 0)}</div>
                 </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3 bg-blue-50 rounded">
-                  <strong>Batch Distribution</strong>
-                  <pre className="text-sm mt-2">{JSON.stringify(webData.summary.batch_distribution || {}, null, 2)}</pre>
+              {/* Unallocated per batch */}
+              {webData.summary.unallocated_per_batch && (
+                <div className="mt-4 p-3 bg-orange-50 rounded border border-orange-200">
+                  <strong className="text-orange-700">Unallocated Students per Batch:</strong>
+                  <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {Object.entries(webData.summary.unallocated_per_batch).map(([batch, count]) => (
+                      <div key={batch} className="text-sm text-orange-600">
+                        Batch {batch}: <strong>{count}</strong>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="p-3 bg-blue-50 rounded">
-                  <strong>Paper Set Distribution</strong>
-                  <pre className="text-sm mt-2">{JSON.stringify(webData.summary.paper_set_distribution || webData.summary.paper_set_distribution_per_batch || {}, null, 2)}</pre>
+              )}
+
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-3 bg-blue-50 rounded border border-blue-200">
+                  <strong className="text-blue-900">Batch Distribution</strong>
+                  <pre className="text-xs mt-2 overflow-auto">{JSON.stringify(webData.summary.batch_distribution || {}, null, 2)}</pre>
+                </div>
+                <div className="p-3 bg-blue-50 rounded border border-blue-200">
+                  <strong className="text-blue-900">Paper Set Distribution</strong>
+                  <pre className="text-xs mt-2 overflow-auto">{JSON.stringify(webData.summary.paper_set_distribution || webData.summary.paper_set_distribution_per_batch || {}, null, 2)}</pre>
                 </div>
               </div>
             </>

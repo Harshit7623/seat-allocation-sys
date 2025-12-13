@@ -5,7 +5,7 @@ from pathlib import Path
 from functools import wraps
 from typing import Dict, List, Tuple
 
-from flask import Flask, render_template_string, jsonify, request
+from flask import Flask, render_template_string, jsonify, request, send_file
 from flask_cors import CORS
 import sqlite3
 import json
@@ -700,8 +700,100 @@ def index():
     return render_template_string(HTML_TEMPLATE)
 
 # -------------------------------------------------------------------
-# Run
-# -------------------------------------------------------------------@app.route('/api/generate-pdf', methods=['POST'])
+# PDF generation helper
+# -------------------------------------------------------------------
+def create_seating_pdf(filename: str, data: Dict) -> str:
+    """
+    Create a PDF from seating data using ReportLab.
+    Returns the filepath where the PDF was saved.
+    
+    Args:
+        filename: Output filename (e.g., 'seat_plan_generated/seating_1234567890.pdf')
+        data: Dictionary containing seating arrangement data
+    """
+    try:
+        from reportlab.lib.pagesizes import landscape, A4
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.units import mm
+    except ImportError:
+        raise RuntimeError("reportlab not installed. Install with: pip install reportlab")
+    
+    # Create directory if it doesn't exist
+    output_dir = BASE_DIR / "seat_plan_generated"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    filepath = output_dir / filename.split('/')[-1]
+    
+    # Get seating data
+    seating = data.get('seating', [])
+    if not seating:
+        raise ValueError("No seating data provided")
+    
+    rows = len(seating)
+    cols = len(seating[0]) if rows > 0 else 0
+    
+    # Create PDF
+    c = canvas.Canvas(str(filepath), pagesize=landscape(A4))
+    width, height = landscape(A4)
+    
+    # Title
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(mm * 10, height - mm * 15, "Seating Arrangement Plan")
+    
+    # Metadata
+    c.setFont("Helvetica", 10)
+    c.drawString(mm * 10, height - mm * 20, f"Rows: {rows} | Columns: {cols} | Generated: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    # Draw seats in grid
+    seat_width = (width - mm * 20) / cols
+    seat_height = (height - mm * 35) / rows
+    
+    c.setLineWidth(0.5)
+    for r_idx, row in enumerate(seating):
+        for c_idx, seat in enumerate(row):
+            x = mm * 10 + c_idx * seat_width
+            y = height - mm * 30 - (r_idx + 1) * seat_height
+            
+            # Draw seat box
+            if seat and seat.get('is_broken'):
+                c.setFillColorRGB(1, 0, 0)  # Red for broken
+                c.rect(x, y, seat_width, seat_height, fill=1, stroke=1)
+                c.setFont("Helvetica-Bold", 7)
+                c.setFillColorRGB(1, 1, 1)
+                c.drawCentredString(x + seat_width/2, y + seat_height/2 + 2, "BROKEN")
+            elif seat and seat.get('is_unallocated'):
+                c.setFillColorRGB(0.95, 0.95, 0.95)  # Light gray
+                c.rect(x, y, seat_width, seat_height, fill=1, stroke=1)
+                c.setFont("Helvetica", 6)
+                c.setFillColorRGB(0.2, 0.2, 0.2)
+                c.drawCentredString(x + seat_width/2, y + seat_height/2, "UNALLOC")
+            elif seat:
+                # Parse hex color from seat data
+                color_hex = seat.get('color', '#ffffff')
+                if color_hex.startswith('#'):
+                    r = int(color_hex[1:3], 16) / 255.0
+                    g = int(color_hex[3:5], 16) / 255.0
+                    b = int(color_hex[5:7], 16) / 255.0
+                    c.setFillColorRGB(r, g, b)
+                else:
+                    c.setFillColorRGB(1, 1, 1)
+                
+                c.rect(x, y, seat_width, seat_height, fill=1, stroke=1)
+                
+                # Draw seat info
+                c.setFont("Helvetica-Bold", 6)
+                c.setFillColorRGB(0.1, 0.1, 0.1)
+                roll = seat.get('roll_number', '')
+                batch = seat.get('batch_label', f"B{seat.get('batch', '')}")
+                c.drawCentredString(x + seat_width/2, y + seat_height/2 + 4, batch)
+                c.drawCentredString(x + seat_width/2, y + seat_height/2 - 2, roll)
+    
+    c.save()
+    return str(filepath)
+
+# -------------------------------------------------------------------
+# PDF generation endpoint
+# -------------------------------------------------------------------
+@app.route('/api/generate-pdf', methods=['POST'])
 def generate_pdf():
     """Generate PDF from seating data"""
     try:
@@ -715,6 +807,7 @@ def generate_pdf():
         return send_file(filepath, as_attachment=True, download_name=filename)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 if __name__ == "__main__":
