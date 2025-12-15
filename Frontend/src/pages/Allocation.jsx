@@ -12,19 +12,6 @@ import React, { useEffect, useState, useRef } from "react";
  * - User can choose PDF method via dropdown
  */
 
-const defaultColors = [
-  "bg-sky-100",
-  "bg-emerald-100",
-  "bg-rose-100",
-  "bg-amber-100",
-  "bg-violet-100",
-  "bg-pink-100",
-  "bg-cyan-100",
-  "bg-lime-100",
-  "bg-fuchsia-100",
-  "bg-slate-100",
-];
-
 const AllocationPage = ({ showToast }) => {
   const [rows, setRows] = useState(8);
   const [cols, setCols] = useState(10);
@@ -46,6 +33,7 @@ const AllocationPage = ({ showToast }) => {
   const [webData, setWebData] = useState(null);
   const [error, setError] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const chartRef = useRef();
 
@@ -83,11 +71,6 @@ const AllocationPage = ({ showToast }) => {
   }
 
   function buildPayload() {
-    const start_rolls_entries = Object.entries(batchStartRolls)
-      .filter(([, v]) => v && String(v).trim() !== "")
-      .map(([k, v]) => `${k}:${v}`)
-      .join(",");
-    
     return {
       rows,
       cols,
@@ -101,8 +84,8 @@ const AllocationPage = ({ showToast }) => {
       start_rolls: Object.keys(batchStartRolls).length
         ? Object.fromEntries(
             Object.entries(batchStartRolls)
-                .filter(([, v]) => v && String(v).trim() !== "")
-                .map(([k, v]) => [parseInt(k, 10), String(v).trim()])
+              .filter(([, v]) => v && String(v).trim() !== "")
+              .map(([k, v]) => [parseInt(k, 10), String(v).trim()])
             )
         : undefined,
       serial_mode: serialMode,
@@ -166,101 +149,329 @@ const AllocationPage = ({ showToast }) => {
       alert("Error fetching constraints: " + (err.message || err));
     }
   }
-
-  // CLIENT-SIDE PDF (Your Original Method)
-  function downloadPdfClientSide() {
-    if (!webData) {
-      alert('No seating data available. Generate chart first.');
+  async function handleResetDatabase() {
+    if (!window.confirm("⚠️ ARE YOU SURE?\n\nThis will delete ALL student data, uploads, and previous allocations from the database.\n\nThis action cannot be undone.")) {
       return;
     }
 
-    if (!window.html2pdf) {
-      alert('html2pdf library not loaded. Using server-side PDF instead...');
-      downloadPdfServerSide();
-      return;
-    }
+    setResetting(true);
+    try {
+      const token = localStorage.getItem('token'); 
+      const headers = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    console.log('📄 Generating PDF (Client-side with html2pdf)...');
-    setPdfLoading(true);
-
-    const container = document.createElement("div");
-    container.style.padding = "12px";
-    container.style.fontFamily = "Inter, Arial, sans-serif";
-    
-    const h = document.createElement("h3");
-    h.innerText = "Seating Arrangement";
-    h.style.textAlign = "center";
-    h.style.marginBottom = "8px";
-    h.style.fontSize = "18px";
-    h.style.fontWeight = "bold";
-    container.appendChild(h);
-
-    const info = document.createElement("div");
-    info.style.textAlign = "center";
-    info.style.fontSize = "12px";
-    info.style.marginBottom = "10px";
-    info.innerText = `Rows: ${rows} | Cols: ${cols} | Batches: ${numBatches} | Generated: ${new Date().toLocaleString()}`;
-    container.appendChild(info);
-
-    const grid = document.createElement("div");
-    grid.style.display = "grid";
-    grid.style.gridTemplateColumns = `repeat(${cols}, 68px)`;
-    grid.style.gap = "6px";
-    grid.style.justifyContent = "center";
-
-    const seats = webData.seating.flat();
-    seats.forEach((s) => {
-      const seatEl = document.createElement("div");
-      seatEl.style.width = "68px";
-      seatEl.style.height = "68px";
-      seatEl.style.border = "1px solid #333";
-      seatEl.style.boxSizing = "border-box";
-      seatEl.style.display = "flex";
-      seatEl.style.flexDirection = "column";
-      seatEl.style.justifyContent = "center";
-      seatEl.style.alignItems = "center";
-      seatEl.style.fontSize = "10px";
-      seatEl.style.background = s.color || "#fff";
-      seatEl.style.padding = "4px";
-      seatEl.style.textAlign = "center";
-      
-      if (s.is_broken) {
-        seatEl.innerHTML = `<div style="font-weight:bold;color:#8B0000">BROKEN</div><div style="font-size:9px;color:#800000">${s.position}</div>`;
-      } else if (s.is_unallocated) {
-        seatEl.innerHTML = `<div style="font-weight:600;color:#666">Batch ${s.batch || ""}</div><div style="font-weight:bold;color:#444">UNALLOC</div>`;
-      } else {
-        const setVal = s.paper_set ? s.paper_set : "";
-        const roll = s.roll_number ? s.roll_number : "";
-        const bLabel = s.batch_label ? s.batch_label : `B${s.batch || ""}`;
-        seatEl.innerHTML = `<div style="font-size:10px;font-weight:600">${bLabel}</div><div style="font-weight:bold">${roll}${setVal}</div><div style="font-size:9px;color:#333">${s.position}</div>`;
-      }
-      grid.appendChild(seatEl);
-    });
-
-    container.appendChild(grid);
-
-    const opt = {
-      margin: 8,
-      filename: "seating_arrangement.pdf",
-      image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: "mm", format: "a4", orientation: "landscape" },
-    };
-
-    window.html2pdf()
-      .set(opt)
-      .from(container)
-      .save()
-      .then(() => {
-        console.log('✅ PDF generated successfully (client-side)');
-        setPdfLoading(false);
-      })
-      .catch((err) => {
-        console.error('❌ html2pdf error:', err);
-        alert('Client-side PDF generation failed. Try server-side method.');
-        setPdfLoading(false);
+      const res = await fetch("/api/reset-data", {
+        method: "POST",
+        headers: headers
       });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Reset failed");
+      }
+
+      alert("✅ Database reset successful. All student data cleared.");
+      setWebData(null); 
+      if (showToast) showToast("Database cleared successfully", "success");
+
+    } catch (err) {
+      console.error("Reset error:", err);
+      alert("Failed to reset database: " + err.message);
+    } finally {
+      setResetting(false);
+    }
+}
+
+  // CLIENT-SIDE PDF - With forced render and longer delay
+function downloadPdfClientSide() {
+  if (!webData) {
+    alert('No seating data available. Generate chart first.');
+    return;
   }
+
+  if (!window.html2pdf) {
+    alert('html2pdf library not loaded.');
+    return;
+  }
+
+  console.log('📄 Generating PDF...');
+  setPdfLoading(true);
+
+  // Create container VISIBLE on screen
+  const container = document.createElement("div");
+  container.id = "pdf-capture-container";
+  container.style.cssText = `
+    padding: 30px;
+    font-family: Arial, sans-serif;
+    background: #ffffff;
+    width: 900px;
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 999999;
+    box-shadow: 0 0 50px rgba(0,0,0,0.5);
+    max-height: 90vh;
+    overflow: auto;
+  `;
+
+  // Overlay
+  const overlay = document.createElement("div");
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 999998;
+  `;
+
+  const loadingText = document.createElement("div");
+  loadingText.style.cssText = `
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: white;
+    font-size: 20px;
+    font-weight: bold;
+    text-align: center;
+    z-index: 9999999;
+    background: rgba(0,0,0,0.9);
+    padding: 20px 40px;
+    border-radius: 10px;
+  `;
+  loadingText.innerHTML = `
+    <div>🔄 Generating PDF...</div>
+    <div style="font-size: 14px; margin-top: 10px;">Please wait 3-4 seconds</div>
+  `;
+
+  // Header
+  const h = document.createElement("h2");
+  h.style.cssText = `
+    text-align: center;
+    margin: 0 0 20px 0;
+    color: #000000;
+    font-size: 28px;
+    font-weight: bold;
+    font-family: Arial, sans-serif;
+  `;
+  h.textContent = "Seating Arrangement";
+  container.appendChild(h);
+
+  // Info
+  const info = document.createElement("div");
+  info.style.cssText = `
+    text-align: center;
+    font-size: 14px;
+    margin-bottom: 20px;
+    color: #000000;
+    font-weight: normal;
+    font-family: Arial, sans-serif;
+  `;
+  info.textContent = `Rows: ${rows} | Cols: ${cols} | Batches: ${numBatches} | Generated: ${new Date().toLocaleString()}`;
+  container.appendChild(info);
+
+  // Grid wrapper
+  const gridWrapper = document.createElement("div");
+  gridWrapper.style.cssText = `
+    background: #ffffff;
+    padding: 15px;
+    border: 3px solid #000000;
+  `;
+
+  // Grid
+  const grid = document.createElement("div");
+  grid.style.cssText = `
+    display: grid;
+    grid-template-columns: repeat(${cols}, 1fr);
+    gap: 6px;
+    background-color: #ffffff;
+  `;
+
+  webData.seating.flat().forEach((s, idx) => {
+    const seatEl = document.createElement("div");
+    seatEl.style.cssText = `
+      border: 2px solid #000000;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 8px 4px;
+      text-align: center;
+      min-height: 70px;
+      background-color: ${s.color || "#ffffff"};
+      font-family: Arial, sans-serif;
+    `;
+    
+    if (s.is_broken) {
+      const brokenLabel = document.createElement("div");
+      brokenLabel.style.cssText = "font-weight: bold; color: #8B0000; font-size: 13px; font-family: Arial, sans-serif;";
+      brokenLabel.textContent = "BROKEN";
+      
+      const posLabel = document.createElement("div");
+      posLabel.style.cssText = "font-size: 10px; color: #800000; margin-top: 4px; font-family: Arial, sans-serif;";
+      posLabel.textContent = s.position;
+      
+      seatEl.appendChild(brokenLabel);
+      seatEl.appendChild(posLabel);
+    } else if (s.is_unallocated) {
+      const unallocLabel = document.createElement("div");
+      unallocLabel.style.cssText = "font-weight: bold; color: #444444; font-size: 12px; font-family: Arial, sans-serif;";
+      unallocLabel.textContent = "UNALLOC";
+      seatEl.appendChild(unallocLabel);
+    } else {
+      const bLabel = s.batch_label || `B${s.batch || ""}`;
+      const roll = s.roll_number || "";
+      const pSet = s.paper_set || "";
+      
+      const batchDiv = document.createElement("div");
+      batchDiv.style.cssText = "font-weight: 600; margin-bottom: 4px; font-size: 11px; color: #000000; font-family: Arial, sans-serif;";
+      batchDiv.textContent = bLabel;
+      
+      const rollDiv = document.createElement("div");
+      rollDiv.style.cssText = "font-weight: bold; font-size: 14px; color: #000000; font-family: Arial, sans-serif;";
+      rollDiv.textContent = roll;
+      
+      seatEl.appendChild(batchDiv);
+      seatEl.appendChild(rollDiv);
+      
+      if (pSet) {
+        const setDiv = document.createElement("div");
+        setDiv.style.cssText = "font-size: 9px; margin-top: 3px; color: #000000; font-family: Arial, sans-serif;";
+        setDiv.textContent = `Set: ${pSet}`;
+        seatEl.appendChild(setDiv);
+      }
+    }
+    
+    grid.appendChild(seatEl);
+  });
+
+  gridWrapper.appendChild(grid);
+  container.appendChild(gridWrapper);
+  
+  document.body.appendChild(overlay);
+  document.body.appendChild(loadingText);
+  document.body.appendChild(container);
+
+  // Force reflow
+  void container.offsetHeight;
+
+  const opt = { 
+    margin: 15,
+    filename: "seating_arrangement.pdf", 
+    image: { 
+      type: "jpeg", 
+      quality: 1.0
+    }, 
+    html2canvas: { 
+      scale: 3,
+      useCORS: true,
+      allowTaint: true,
+      logging: true,
+      backgroundColor: '#ffffff',
+      width: 900,
+      height: container.scrollHeight,
+      scrollY: 0,
+      scrollX: 0,
+      windowWidth: 900,
+      windowHeight: container.scrollHeight
+    }, 
+    jsPDF: { 
+      unit: "mm", 
+      format: "a4", 
+      orientation: "landscape"
+    }
+  };
+
+  // CRITICAL: Wait longer for fonts and render
+  setTimeout(() => {
+    console.log('🔄 Starting capture in 2 seconds...');
+    loadingText.innerHTML = `
+      <div>📸 Capturing content...</div>
+      <div style="font-size: 14px; margin-top: 10px;">Almost done!</div>
+    `;
+    
+    setTimeout(() => {
+      console.log('📸 Capturing now...');
+      
+      window.html2pdf()
+        .set(opt)
+        .from(container)
+        .toPdf()
+        .get('pdf')
+        .then((pdf) => {
+          console.log('✅ PDF object created');
+          console.log('Pages:', pdf.internal.getNumberOfPages());
+          console.log('Page size:', pdf.internal.pageSize);
+          return pdf;
+        })
+        .outputPdf('blob')
+        .then((pdfBlob) => {
+          console.log('📦 PDF Blob size:', pdfBlob.size, 'bytes');
+          
+          if (pdfBlob.size < 1000) {
+            throw new Error('PDF is too small - likely empty!');
+          }
+          
+          // Download
+          const url = URL.createObjectURL(pdfBlob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'seating_arrangement.pdf';
+          document.body.appendChild(a);
+          a.click();
+          
+          setTimeout(() => {
+            URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+          }, 100);
+          
+          console.log('✅✅✅ PDF downloaded!');
+          return pdfBlob;
+        })
+        .then(() => {
+          // Cleanup
+          if (document.body.contains(container)) {
+            document.body.removeChild(container);
+          }
+          if (document.body.contains(overlay)) {
+            document.body.removeChild(overlay);
+          }
+          if (document.body.contains(loadingText)) {
+            document.body.removeChild(loadingText);
+          }
+          
+          setPdfLoading(false);
+          alert('✅ PDF downloaded successfully!\n\nCheck your Downloads folder for "seating_arrangement.pdf"');
+        })
+        .catch((err) => {
+          console.error('❌ PDF Error:', err);
+          console.error('Error details:', {
+            message: err.message,
+            stack: err.stack
+          });
+          
+          // Cleanup
+          if (document.body.contains(container)) {
+            document.body.removeChild(container);
+          }
+          if (document.body.contains(overlay)) {
+            document.body.removeChild(overlay);
+          }
+          if (document.body.contains(loadingText)) {
+            document.body.removeChild(loadingText);
+          }
+          
+          setPdfLoading(false);
+          alert('❌ PDF generation failed!\n\nError: ' + err.message + '\n\nTry the Server-Side option instead.');
+        });
+    }, 2000); // Wait 2 more seconds after initial render
+  }, 1000); // Wait 1 second for initial render
+}
 
   // SERVER-SIDE PDF (Using your pdf_gen.py)
   async function downloadPdfServerSide() {
@@ -273,6 +484,12 @@ const AllocationPage = ({ showToast }) => {
 
     try {
       console.log('📄 Requesting server-side PDF...');
+      const pdfPayload = {
+        ...buildPayload(),
+        seating: webData.seating,
+        metadata: webData.metadata
+      };
+      console.log('Sending PDF payload:', pdfPayload);
       
       const response = await fetch('/api/generate-pdf', {
         method: 'POST',
@@ -296,7 +513,7 @@ const AllocationPage = ({ showToast }) => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `seating_arrangement_${new Date().getTime()}.pdf`;
+      a.download = `seating_arrangement_server_${new Date().getTime()}.pdf`;
       document.body.appendChild(a);
       a.click();
       
@@ -539,10 +756,28 @@ const AllocationPage = ({ showToast }) => {
                   <span className="text-sm text-gray-700">Use demo DB for enrollments/labels</span>
                 </label>
               </div>
+            
 
               {error && <div className="col-span-1 md:col-span-2 mt-2 text-red-600 font-medium text-sm">{error}</div>}
+
+              {/* DANGER ZONE - DB RESET */}
+                <div className="mt-8 pt-6 border-t border-gray-200">
+                    <div className="flex items-center justify-between">
+                    <div>
+                        <h3 className="text-sm font-bold text-red-600">Danger Zone</h3>
+                        <p className="text-xs text-gray-500">Resetting will clear all student data and uploads.</p>
+                    </div>
+                    <button 
+                        onClick={handleResetDatabase} 
+                        disabled={resetting}
+                        className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 px-4 py-2 rounded text-sm font-semibold transition disabled:opacity-50"
+                    >
+                        {resetting ? "Resetting..." : "Reset Database"}
+                    </button>
+                    </div>
+                </div>
             </div>
-          </div>
+            </div>
 
           <div className="bg-white rounded-xl shadow p-6 h-fit">
             <h3 className="font-semibold mb-3">Quick Summary</h3>
@@ -581,10 +816,10 @@ const AllocationPage = ({ showToast }) => {
                 </div>
               </div>
             </>
-            )}
+          )}
         </div>
-        </div>
+      </div>
     </div>
-    );
+  );
 };
 export default AllocationPage;
