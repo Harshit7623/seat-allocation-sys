@@ -18,11 +18,11 @@ const TeamMemberCard = ({ initials, name, role, description }) => (
 // --- The Main About Us Component ---
 const AboutUs = ({ showToast }) => {
     const teamMembers = [
-        { initials: "JL", name: "Javier Lopez", role: "Project Lead", description: "Oversaw the entire system architecture and core constraints definition." },
-        { initials: "AR", name: "Anjali Rao", role: "Lead Developer", description: "Primary engineer for the back-end allocation algorithm and API stability." },
-        { initials: "MJ", name: "Mikael Jones", role: "UI/UX Designer", description: "Designed the dark theme interface and ensured high-fidelity user experience." },
-        { initials: "ST", name: "Sara Tan", role: "Algorithm Specialist", description: "Optimized the constraint satisfaction problem (CSP) solver for speed and fairness." },
-        { initials: "DB", name: "David Bell", role: "Documentation & QA", description: "Handled rigorous testing and produced clear, accessible system documentation." },
+        { initials: "TS", name: "Tanish Shivhare", role: "Project Lead /Algorithm Specialist", description: "Oversaw the entire system architecture and core constraints definition." },
+        { initials: "HT", name: "Harshit Tiwari", role: "Project Lead / Backend Developer", description: "Primary engineer for the back-end allocation algorithm and API stability." },
+        { initials: "LB", name: "Lavanya Bajpai", role: "Frontend Developer", description: "Optimized the constraint satisfaction problem (CSP) solver for speed and fairness." },
+        { initials: "AN", name: "Ayush Nager", role: "UI/UX Designer", description: "Designed the dark theme interface and ensured high-fidelity user experience." },
+        { initials: "YB", name: "Yash Baraskar", role: "Documentation & QA", description: "Handled rigorous testing and produced clear, accessible system documentation." },
     ];
 
     return (
