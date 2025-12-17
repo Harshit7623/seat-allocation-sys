@@ -10,6 +10,7 @@ import React, { useEffect, useState, useRef } from "react";
  * - Server-side PDF (ReportLab) - Professional quality
  * - Auto-fallback between methods
  * - User can choose PDF method via dropdown
+ * - Dynamic Theme Support for Inputs
  */
 
 const AllocationPage = ({ showToast }) => {
@@ -149,6 +150,7 @@ const AllocationPage = ({ showToast }) => {
       alert("Error fetching constraints: " + (err.message || err));
     }
   }
+
   async function handleResetDatabase() {
     if (!window.confirm("⚠️ ARE YOU SURE?\n\nThis will delete ALL student data, uploads, and previous allocations from the database.\n\nThis action cannot be undone.")) {
       return;
@@ -603,9 +605,18 @@ function downloadPdfClientSide() {
     );
   }
 
+  // Common styles for dynamic inputs
+  const inputBaseClasses = "mt-1 w-full p-2 border rounded-md transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500";
+  // Light Mode Styles: White background, Dark text, Gray border
+  const inputLightClasses = "bg-white border-gray-300 text-gray-900 placeholder-gray-400";
+  // Dark Mode Styles: Dark Gray background, White text, Dark border
+  const inputDarkClasses = "dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
+  
+  const inputClasses = `${inputBaseClasses} ${inputLightClasses} ${inputDarkClasses}`;
+
   return (
     // MAIN WRAPPER: Solid, theme-aware background
-    <div className="min-h-screen bg-white dark:bg-gray-900 p-6">
+    <div className="min-h-screen bg-white dark:bg-gray-900 p-6 transition-colors duration-200">
       <div className="max-w-6xl mx-auto">
         {/* MAIN HEADING TEXT COLOR */}
         <h1 className="text-3xl font-bold text-center mb-6 text-gray-800 dark:text-white">Seating Arrangement — Allocation</h1>
@@ -613,37 +624,37 @@ function downloadPdfClientSide() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           {/* INPUTS PANEL */}
           {/* INPUT PANEL BACKGROUND */}
-          <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+          <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow p-6 transition-colors duration-200">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               
               <div>
                 {/* LABEL TEXT COLOR */}
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Rows</label>
-                {/* INPUT FIELD STYLES */}
-                <input type="number" className="mt-1 w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" value={rows} onChange={(e)=>setRows(Math.max(1, parseInt(e.target.value||1)))} />
+                {/* INPUT FIELD STYLES - Updated */}
+                <input type="number" className={inputClasses} value={rows} onChange={(e)=>setRows(Math.max(1, parseInt(e.target.value||1)))} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Columns</label>
-                <input type="number" className="mt-1 w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" value={cols} onChange={(e)=>setCols(Math.max(1, parseInt(e.target.value||1)))} />
+                <input type="number" className={inputClasses} value={cols} onChange={(e)=>setCols(Math.max(1, parseInt(e.target.value||1)))} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Number of Batches</label>
-                <input type="number" className="mt-1 w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" value={numBatches} onChange={(e)=>setNumBatches(Math.max(1, Math.min(50, parseInt(e.target.value||1))))} />
+                <input type="number" className={inputClasses} value={numBatches} onChange={(e)=>setNumBatches(Math.max(1, Math.min(50, parseInt(e.target.value||1))))} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Block Width (cols)</label>
-                <input type="number" className="mt-1 w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" value={blockWidth} onChange={(e)=>setBlockWidth(Math.max(1, parseInt(e.target.value||1)))} />
+                <input type="number" className={inputClasses} value={blockWidth} onChange={(e)=>setBlockWidth(Math.max(1, parseInt(e.target.value||1)))} />
               </div>
 
               <div className="col-span-1 md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Broken Seats (row-col)</label>
-                <input type="text" className="mt-1 w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="e.g., 1-3,2-1" value={brokenSeats} onChange={(e)=>setBrokenSeats(e.target.value)} />
+                <input type="text" className={inputClasses} placeholder="e.g., 1-3,2-1" value={brokenSeats} onChange={(e)=>setBrokenSeats(e.target.value)} />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate entries with commas; rows/cols are 1-based.</p>
               </div>
 
               <div className="col-span-1 md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Batch Student Counts (optional)</label>
-                <input type="text" className="mt-1 w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="1:35,2:30,3:25" value={batchStudentCounts} onChange={(e)=>setBatchStudentCounts(e.target.value)} />
+                <input type="text" className={inputClasses} placeholder="1:35,2:30,3:25" value={batchStudentCounts} onChange={(e)=>setBatchStudentCounts(e.target.value)} />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Format: batchIndex:count, separated by commas. Shows unallocated if total &lt; available seats</p>
               </div>
 
@@ -656,10 +667,10 @@ function downloadPdfClientSide() {
                       <div key={idx}>
                         {/* INPUT LABEL TEXT COLOR */}
                         <label className="text-xs text-gray-600 dark:text-gray-400">Batch {idx}</label>
-                        {/* INPUT FIELD STYLES */}
+                        {/* INPUT FIELD STYLES - Updated */}
                         <input
                           type="text"
-                          className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                          className={inputClasses}
                           placeholder={`e.g., BTCS24O${1000 + (idx - 1) * 100}`}
                           value={batchStartRolls[idx] || ""}
                           onChange={(e) => setBatchStartRolls((prev) => ({ ...prev, [idx]: e.target.value }))}
@@ -673,20 +684,20 @@ function downloadPdfClientSide() {
 
               <div className="col-span-1 md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Batch Colors (optional)</label>
-                <input type="text" className="mt-1 w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="1:#DBEAFE,2:#DCFCE7" value={batchColorsInput} onChange={(e)=>setBatchColorsInput(e.target.value)} />
+                <input type="text" className={inputClasses} placeholder="1:#DBEAFE,2:#DCFCE7" value={batchColorsInput} onChange={(e)=>setBatchColorsInput(e.target.value)} />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Format: batchIndex:#HEXCOLOR, separated by commas</p>
               </div>
 
               <div className="col-span-1 md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Batch Labels (optional)</label>
-                <input type="text" className="mt-1 w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="1:CSE,2:ECE,3:IT" value={batchLabelsInput} onChange={(e)=>setBatchLabelsInput(e.target.value)} />
+                <input type="text" className={inputClasses} placeholder="1:CSE,2:ECE,3:IT" value={batchLabelsInput} onChange={(e)=>setBatchLabelsInput(e.target.value)} />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Human readable branch names. Format: batchIndex:LABEL</p>
               </div>
 
               <div className="col-span-1">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Fill Batches By Column</label>
                 <div className="flex items-center gap-3">
-                  <input type="checkbox" checked={batchByColumn} onChange={(e)=>setBatchByColumn(e.target.checked)} className="h-5 w-5 text-blue-600 focus:ring-blue-500 dark:text-blue-500 dark:focus:ring-blue-400" />
+                  <input type="checkbox" checked={batchByColumn} onChange={(e)=>setBatchByColumn(e.target.checked)} className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:focus:ring-blue-400" />
                   <span className="text-sm text-gray-600 dark:text-gray-400">Column-major assignment</span>
                 </div>
               </div>
@@ -694,7 +705,7 @@ function downloadPdfClientSide() {
               <div className="col-span-1">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Enforce No Adjacent Same Batch</label>
                 <div className="flex items-center gap-3">
-                  <input type="checkbox" checked={enforceNoAdjacentBatches} onChange={(e)=>setEnforceNoAdjacentBatches(e.target.checked)} className="h-5 w-5 text-blue-600 focus:ring-blue-500 dark:text-blue-500 dark:focus:ring-blue-400" />
+                  <input type="checkbox" checked={enforceNoAdjacentBatches} onChange={(e)=>setEnforceNoAdjacentBatches(e.target.checked)} className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:focus:ring-blue-400" />
                   <span className="text-sm text-gray-600 dark:text-gray-400">Optional constraint</span>
                 </div>
               </div>
@@ -702,7 +713,7 @@ function downloadPdfClientSide() {
               <div className="col-span-1 md:col-span-2 mt-4">
                 <div className="flex gap-3 flex-wrap items-center">
                   {/* BUTTONS: Adjusted hover/focus colors for dynamic themes */}
-                  <button onClick={generate} disabled={loading} className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 text-white px-6 py-2 rounded font-medium transition"> 
+                  <button onClick={generate} disabled={loading} className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 text-white px-6 py-2 rounded font-medium transition shadow-sm"> 
                     {loading ? "Generating..." : "Generate Chart"}
                   </button>
                   
@@ -710,7 +721,7 @@ function downloadPdfClientSide() {
                   <button 
                     onClick={downloadPdf}
                     disabled={!webData || pdfLoading}
-                    className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 text-white px-6 py-2 rounded font-medium transition inline-flex items-center gap-2"
+                    className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 text-white px-6 py-2 rounded font-medium transition inline-flex items-center gap-2 shadow-sm"
                   >
                     {pdfLoading ? (
                       <>
@@ -732,7 +743,7 @@ function downloadPdfClientSide() {
                   <div className="relative group">
                     <button 
                       disabled={!webData || pdfLoading}
-                      className="bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 text-white px-4 py-2 rounded font-medium transition"
+                      className="bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 text-white px-4 py-2 rounded font-medium transition shadow-sm"
                       title="PDF Options"
                     >
                       ⚙️
@@ -759,7 +770,7 @@ function downloadPdfClientSide() {
                     </div>
                   </div>
                   
-                  <button onClick={showConstraints} className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded font-medium transition">
+                  <button onClick={showConstraints} className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded font-medium transition shadow-sm">
                     View Constraints
                   </button>
                 </div>
@@ -767,7 +778,7 @@ function downloadPdfClientSide() {
 
               <div className="col-span-1 md:col-span-2">
                 <label className="inline-flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={useDemoDb} onChange={(e)=>setUseDemoDb(e.target.checked)} className="h-5 w-5 text-blue-600 focus:ring-blue-500 dark:text-blue-500 dark:focus:ring-blue-400" />
+                  <input type="checkbox" checked={useDemoDb} onChange={(e)=>setUseDemoDb(e.target.checked)} className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:focus:ring-blue-400" />
                   <span className="text-sm text-gray-700 dark:text-gray-300">Use demo DB for enrollments/labels</span>
                 </label>
               </div>
@@ -779,69 +790,110 @@ function downloadPdfClientSide() {
                 <div className="col-span-1 md:col-span-2 mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
                     <div className="flex items-center justify-between">
                     <div>
-                        <h3 className="text-sm font-bold text-red-600 dark:text-red-400">Danger Zone</h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Resetting will clear all student data and uploads.</p>
+                        <h3 className="text-sm font-bold text-red-600 dark:text-red-400 flex items-center gap-2">
+                        ⚠️ Danger Zone
+                        </h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Clear all student data and reset the database.
+                        </p>
                     </div>
-                    {/* RESET BUTTON STYLES */}
                     <button 
-                        onClick={handleResetDatabase} 
+                        onClick={handleResetDatabase}
                         disabled={resetting}
-                        className="bg-red-50 dark:bg-red-900 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-700 hover:bg-red-100 dark:hover:bg-red-800 px-4 py-2 rounded text-sm font-semibold transition disabled:opacity-50"
+                        className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 border border-red-200 rounded text-sm font-medium transition dark:bg-red-900/30 dark:text-red-300 dark:border-red-800 dark:hover:bg-red-900/50"
                     >
-                        {resetting ? "Resetting..." : "Reset Database"}
+                        {resetting ? "Clearing..." : "Reset Database"}
                     </button>
                     </div>
                 </div>
-            </div>
-            </div>
 
-          {/* SUMMARY PANEL BACKGROUND AND TEXT COLOR */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 h-fit text-gray-800 dark:text-white">
-            <h3 className="font-semibold mb-3">Quick Summary</h3>
-            <div className="space-y-2 text-sm">
-              <div>Total rows: <strong>{rows}</strong></div>
-              <div>Total cols: <strong>{cols}</strong></div>
-              <div>Batch count: <strong>{numBatches}</strong></div>
-              <div>Block width: <strong>{blockWidth}</strong></div>
-              <div>Using demo DB: <strong>{useDemoDb ? "Yes" : "No"}</strong></div>
             </div>
-            <div className="mt-4">
-              <button onClick={()=>{ setRows(8); setCols(10); setNumBatches(3); setBlockWidth(3); }} className="text-xs text-gray-600 dark:text-gray-400 hover:underline">Reset to defaults</button>
+          </div>
+
+          {/* QUICK SUMMARY PANEL */}
+          <div className="lg:col-span-1">
+             {/* SUMMARY CARD BACKGROUND - Dynamic */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 sticky top-6 transition-colors duration-200">
+              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">Quick Summary</h3>
+              <div className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
+                <div className="flex justify-between">
+                  <span>Total rows:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">{rows}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Total cols:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">{cols}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Total seats:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">{rows * cols}</span>
+                </div>
+                <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+                <div className="flex justify-between">
+                  <span>Batch count:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">{numBatches}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Block width:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">{blockWidth}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Using demo DB:</span>
+                  <span className={`font-semibold ${useDemoDb ? "text-green-600 dark:text-green-400" : "text-orange-600 dark:text-orange-400"}`}>
+                    {useDemoDb ? "Yes" : "No"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button 
+                  onClick={() => {
+                    setRows(8); setCols(10); setNumBatches(3); setBlockWidth(3);
+                    setBrokenSeats(""); setBatchStudentCounts(""); setBatchLabelsInput("");
+                    setUseDemoDb(true); setBatchStartRolls({}); setBatchRollNumbers({});
+                    setBatchColorsInput(""); setBatchByColumn(true);
+                    setWebData(null); setError(null);
+                  }}
+                  className="w-full py-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition"
+                >
+                  Reset to defaults
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Seating Chart */}
-        {/* SEATING CHART PANEL BACKGROUND AND TEXT COLOR */}
-        <div ref={chartRef} className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Seating Chart</h2>
-
-          {!webData && <div className="text-gray-500 dark:text-gray-400">No seating generated yet. Click "Generate Chart".</div>}
-
+        {/* OUTPUT SECTION - Chart */}
+        <div ref={chartRef}>
           {webData && (
-            <>
-              <div className="mb-3">
-                {webData.validation && webData.validation.is_valid ? (
-                  <div className="text-green-700 dark:text-green-400 font-medium">All constraints satisfied</div>
-                ) : (
-                  <div className="text-red-600 dark:text-red-400 font-medium">Violations detected — open constraints to inspect</div>
-                )}
-              </div>
-
-              {/* SEATING GRID CONTAINER (Added dark:bg-gray-900 for consistent dark area) */}
-              <div className="overflow-auto p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-                  gap: '6px',
-                  // Ensure inner container uses the background of the wrapper
-                }}>
-                  {webData.seating.flat().map(renderSeat)}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 overflow-x-auto transition-colors duration-200">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-gray-800 dark:text-white">Generated Layout</h3>
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                   {/* Validation Status */}
+                  {webData.validation && !webData.validation.is_valid ? (
+                    <span className="text-red-500 font-bold">⚠️ Constraints Violated</span>
+                  ) : (
+                    <span className="text-green-600 dark:text-green-400 font-bold">✓ Valid Layout</span>
+                  )}
                 </div>
               </div>
-            </>
+              
+              <div 
+                className="grid gap-2 mx-auto"
+                style={{
+                  gridTemplateColumns: `repeat(${cols}, minmax(84px, 1fr))`,
+                  width: "max-content"
+                }}
+              >
+                {webData.seating.map((row, rIdx) => 
+                  row.map((seat, cIdx) => renderSeat(seat, rIdx, cIdx))
+                )}
+              </div>
+            </div>
           )}
         </div>
+
       </div>
     </div>
   );
