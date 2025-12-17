@@ -22,7 +22,9 @@ import LayoutPage from './pages/LayoutPage';
 import Allocation from './pages/Allocation';
 import FeedbackPage from './pages/FeedbackPage';
 import AboutusPage from './pages/AboutusPage';
-import TemplateEditor from './pages/TemplateEditor';
+import TemplateEditor from './pages/TemplateEditor'; //new added
+import AttendancePage from './pages/AttendencePage'; //new added
+
 
 
 // --- THEME TOGGLE COMPONENT (Standalone) ---
@@ -85,6 +87,8 @@ const AppContent = () => {
       case 'template-editor': // The new page key
         // Pass showToast since TemplateEditor uses it
         return <TemplateEditor showToast={showToast} />; 
+      case 'attendence' :
+        return <AttendancePage showToast = {showToast}/>;
       default:
         return <LandingPage setCurrentPage={setCurrentPage} />;
     }

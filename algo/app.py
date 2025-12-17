@@ -14,6 +14,15 @@ from flask_cors import CORS
 
 from pdf_gen.pdf_generation import get_or_create_seating_pdf
 from pdf_gen.template_manager import template_manager
+
+# Attendence generation module import 
+try:
+    from attendence_gen.attend_gen import generate_attendance_pdf
+    print("✅ Attendance PDF module loaded")
+except ImportError:
+    generate_attendance_pdf = None
+
+
 # --------------------------------------------------
 # FIXED: Auth Module Import
 # --------------------------------------------------
@@ -612,6 +621,42 @@ def test_pdf():
     except Exception as e:
         print(f"❌ PDF Error: {e}")
         return jsonify({"error": str(e)}), 500
+    
+#=============================================================
+# Attendence Generation
+#=============================================================
+@app.route('/api/allocations', methods=['GET'])
+def get_all_allocations():
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    # Query to get unique batches that have already been allocated
+    cur.execute("SELECT DISTINCT batch_id, batch_name, created_at FROM uploads")
+    rows = cur.fetchall()
+    conn.close()
+    return jsonify([{"id": r[0], "batch_name": r[1], "date": r[2]} for r in rows])
+
+@app.route('/api/generate-attendance', methods=['POST'])
+def get_attendance():
+    if generate_attendance_pdf is None:
+        return jsonify({"error": "Attendance module not found"}), 500
+        
+    try:
+        data = request.get_json()
+        seating = data.get('seating', [])
+        batch = data.get('batch_name', 'Examination')
+        
+        pdf_buffer = generate_attendance_pdf(seating, batch)
+        
+        return send_file(
+            pdf_buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f"attendance_{batch}.pdf"
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 
 # --------------------------------------------------
 # Admin/Maintenance Routes
@@ -643,7 +688,6 @@ def reset_data():
     except Exception as e:
         print(f"❌ RESET ERROR: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
-
 # --------------------------------------------------
 # Health Check
 # --------------------------------------------------

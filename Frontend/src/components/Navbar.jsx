@@ -21,7 +21,8 @@ const Navbar = ({ currentPage, setCurrentPage }) => {
     { name: 'Profile', page: 'profile' },
     { name: 'Feedback', page: 'feedback'},
     { name: 'About us', page: 'aboutus'},
-    { name: 'Template Editor ', page: 'template-editor'}
+    { name: 'Template Editor ', page: 'template-editor'},
+    { name: 'Attendence ', page: 'attendence'}
   ] : [];
 
   return (
