@@ -72,7 +72,6 @@ const StatCard = ({ stat, index }) => {
         </div>
         
         <div className="space-y-1">
-          <h3 className="micro-label">System Metric</h3>
           <div className="text-4xl font-black tracking-tight text-gray-900 dark:text-gray-100 font-mono">
             {count}
           </div>
