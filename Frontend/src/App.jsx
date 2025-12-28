@@ -170,7 +170,6 @@ const AppContent = () => {
         return <Allocation showToast={showToast} />;
       case 'classroom':
         return <ClassroomPage setCurrentPage={setCurrentPage} />;
-      
       case 'feedback':
         return <FeedbackPage showToast={showToast} />;
       case 'aboutus':
