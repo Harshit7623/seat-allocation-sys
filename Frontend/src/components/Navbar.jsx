@@ -1,5 +1,20 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
-import { Layout, LogOut, Menu, X, Moon, Sun, Flame } from 'lucide-react';
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import {
+  Layout,
+  LogOut,
+  Menu,
+  X,
+  Moon,
+  Sun,
+  LayoutDashboard,
+  User,
+  MessageSquare,
+  Info,
+  FileEdit,
+  ClipboardList,
+  Plus
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -7,8 +22,6 @@ const Navbar = ({ currentPage, setCurrentPage }) => {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isTop, setIsTop] = useState(true);
-  const navRef = useRef(null);
 
   const handleLogout = async () => {
     await logout();
@@ -16,184 +29,275 @@ const Navbar = ({ currentPage, setCurrentPage }) => {
     setMobileMenuOpen(false);
   };
 
-  useLayoutEffect(() => {
-    const updateOffset = () => {
-      if (navRef.current) {
-        const rect = navRef.current.getBoundingClientRect();
-        document.documentElement.style.setProperty('--navbar-offset', `${rect.bottom}px`);
-      }
-    };
-    updateOffset();
-    window.addEventListener('resize', updateOffset);
-    return () => window.removeEventListener('resize', updateOffset);
-  }, [mobileMenuOpen]);
-
-  useEffect(() => {
-    const onScroll = () => {
-      setIsTop(window.scrollY < 100);
-    };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
   const navItems = user
     ? [
-        { name: 'Dashboard', page: 'dashboard' },
-        { name: 'Create', page: 'create-plan' },
-        { name: 'Profile', page: 'profile' },
-        { name: 'Feedback', page: 'feedback' },
-        { name: 'About us', page: 'aboutus' },
-        { name: 'Template Editor', page: 'template-editor' },
-        { name: 'Attendence', page: 'attendence' }
+        { name: 'Dashboard', page: 'dashboard', icon: LayoutDashboard },
+        { name: 'Create', page: 'create-plan', icon: Plus },
+        { name: 'Template Editor', page: 'template-editor', icon: FileEdit },
+        { name: 'Attendance', page: 'attendence', icon: ClipboardList },
+        { name: 'Feedback', page: 'feedback', icon: MessageSquare },
+        { name: 'About us', page: 'aboutus', icon: Info }
       ]
     : [];
 
+  const isActive = (page) => currentPage === page;
+
   return (
-    <nav
-      ref={navRef}
-      className="fixed top-0 left-0 right-0 z-50 flex justify-center transition-all duration-500"
-    >
-      <div
-        className={`w-[95%] max-w-7xl px-6 h-20 flex items-center justify-between transition-all duration-500 shadow-md rounded-b-2xl bg-transparent backdrop-blur-2xl backdrop-saturate-150 border-b ${
-          theme === 'dark'
-            ? 'border-gray-800/40'
-            : 'border-gray-200/30'
-        }`}
+    <>
+      {/* Desktop Navbar */}
+      <motion.nav
+        initial={{ y: -100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.5, ease: 'easeOut' }}
+        className="sticky top-0 z-40 hidden md:block"
       >
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setCurrentPage('landing')}>
-          <div className="relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-orange-500 to-amber-500 rounded-xl blur-md opacity-50"></div>
-            <div className="relative bg-gradient-to-br from-orange-500 to-amber-500 p-2.5 rounded-xl shadow-lg">
-              <Flame className="text-white" size={24} />
+        <div className="w-[95%] max-w-7xl mx-auto pt-4">
+          <div className="glass-card backdrop-blur-md rounded-2xl px-6 h-20 flex items-center justify-between shadow-lg border font-sans">
+          {/* Logo */}
+          <div
+            className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={() => setCurrentPage('landing')}
+          >
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
+              <Layout className="text-white w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold leading-none uppercase tracking-tighter bg-gradient-to-r from-gray-900 dark:from-white to-gray-600 dark:to-gray-400 bg-clip-text text-transparent">
+                SeatAlloc
+              </h1>
+              <span className="text-[8px] font-bold uppercase tracking-widest text-orange-600 dark:text-orange-400"></span>
             </div>
           </div>
-          <span className={`text-xl font-black ${
-            theme === 'dark' 
-              ? 'text-white drop-shadow-[0_0_10px_rgba(192,192,192,0.8)]' 
-              : 'text-gray-800'
-          }`}>SeatAlloc</span>
-        </div>
 
-        <div className="hidden md:flex items-center gap-2">
-          {navItems.map((item) => (
-            <button
-              key={item.page}
-              onClick={() => setCurrentPage(item.page)}
-              className={`nav-pill px-4 py-2 text-sm font-semibold rounded-full transition-all duration-200 ${
-                currentPage === item.page
-                  ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
-                  : theme === 'dark'
-                    ? 'text-gray-300 hover:text-orange-400 hover:bg-gray-700/40 drop-shadow-[0_0_8px_rgba(192,192,192,0.6)]'
-                    : 'text-gray-700 hover:text-orange-600 hover:bg-gray-100'
-              }`}
-            >
-              {item.name}
-            </button>
-          ))}
+          {/* Navigation Links */}
+          {user && (
+            <div className="flex items-center gap-2 bg-gray-100/30 dark:bg-gray-700/30 p-1.5 rounded-xl border border-gray-200/60 dark:border-gray-600/60 backdrop-blur-sm">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.page);
 
-          <button
-            onClick={toggleTheme}
-            className="p-2.5 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200 hover:scale-110 ml-2"
-            aria-label="Toggle theme"
-          >
-            {theme === 'light' ? <Moon className="text-gray-700" size={20} /> : <Sun className="text-amber-500" size={20} />}
-          </button>
+                return (
+                  <motion.button
+                    key={item.page}
+                    onClick={() => setCurrentPage(item.page)}
+                    className={`relative px-3 py-2 rounded-lg transition-colors duration-200 flex items-center gap-2 font-semibold text-xs uppercase tracking-wide ${
+                      active
+                        ? 'text-gray-900 dark:text-white'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                    }`}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span>{item.name}</span>
 
-          {user ? (
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 bg-gradient-to-r from-red-500 to-red-600 text-white px-4 py-2 rounded-lg shadow-lg hover:shadow-2xl hover:scale-105 font-semibold ml-2"
-            >
-              <LogOut size={18} /> Logout
-            </button>
-          ) : (
-            <div className="flex gap-2 ml-2">
-              <button
-                onClick={() => setCurrentPage('login')}
-                className="text-orange-600 dark:text-orange-400 px-4 py-2 rounded-lg border-2 border-orange-600 dark:border-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 font-semibold"
-              >
-                Login
-              </button>
-              <button
-                onClick={() => setCurrentPage('signup')}
-                className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2 rounded-lg shadow-lg hover:shadow-xl font-semibold"
-              >
-                Sign Up
-              </button>
+                    {active && (
+                      <motion.div
+                        layoutId="nav-indicator"
+                        className="absolute inset-0 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800/60 -z-10"
+                        transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+                      />
+                    )}
+                  </motion.button>
+                );
+              })}
             </div>
           )}
-        </div>
 
-        <div className="flex items-center gap-2 md:hidden">
-          <button
-            onClick={toggleTheme}
-            className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
-            aria-label="Toggle theme"
-          >
-            {theme === 'light' ? <Moon className="text-gray-700" size={20} /> : <Sun className="text-amber-500" size={20} />}
-          </button>
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all"
-          >
-            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        </div>
-      </div>
+          {/* Actions */}
+          <div className="flex items-center gap-4">
+            <motion.button
+              onClick={toggleTheme}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="w-10 h-10 rounded-full hover:bg-gray-200/40 dark:hover:bg-gray-700/40 flex items-center justify-center transition-colors"
+              aria-label="Toggle theme"
+            >
+              {theme === 'light' ? (
+                <Moon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              ) : (
+                <Sun className="w-5 h-5 text-amber-500" />
+              )}
+            </motion.button>
 
-      {mobileMenuOpen && (
-        <div className="md:hidden pb-4 bg-transparent backdrop-blur-2xl backdrop-saturate-150 border-t border-gray-200/30 dark:border-gray-800/40 animate-slideDown">
-          <div className="space-y-2">
-            {navItems.map((item) => (
-              <button
-                key={item.page}
+            <div className="h-8 w-px bg-gray-200/40 dark:bg-gray-600/40" />
+
+            {user ? (
+              <div className="flex items-center gap-2">
+                <motion.button
+                  onClick={() => setCurrentPage('profile')}
+                  className="w-10 h-10 rounded-full border border-gray-200/60 dark:border-gray-600/60 hover:bg-gray-200/40 dark:hover:bg-gray-700/40 flex items-center justify-center transition-colors"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  aria-label="Profile"
+                >
+                  <User className="w-5 h-5 text-gray-700 dark:text-gray-200" />
+                </motion.button>
+
+                <motion.button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 bg-red-500 text-white px-3 py-3 rounded-full hover:bg-red-600 transition-all duration-200 font-bold text-sm uppercase tracking-wide shadow-md hover:shadow-lg"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <LogOut size={14} />
+                </motion.button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <motion.button
+                  onClick={() => setCurrentPage('login')}
+                  className="text-orange-600 dark:text-orange-400 px-4 py-2 rounded-lg border border-orange-600/40 dark:border-orange-400/40 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition font-bold text-sm uppercase tracking-wide"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Login
+                </motion.button>
+                <motion.button
+                  onClick={() => setCurrentPage('signup')}
+                  className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2 rounded-lg hover:from-orange-600 hover:to-amber-600 transition font-bold text-sm uppercase tracking-wide shadow-md hover:shadow-lg"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Sign Up
+                </motion.button>
+              </div>
+            )}
+          </div>
+        </div>
+        </div>
+      </motion.nav>
+
+      {/* Mobile Navbar */}
+      <motion.nav
+        initial={{ y: -100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.5, ease: 'easeOut' }}
+        className="sticky top-0 z-40 w-full md:hidden bg-white/40 dark:bg-phantom-black/40 border-b border-gray-200/40 dark:border-gray-700/40 shadow-md font-sans backdrop-blur-md"
+      >
+        <div className="px-4 h-16 flex items-center justify-between">
+          {/* Logo */}
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setCurrentPage('landing')}>
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-lg">
+              <Layout className="text-white w-5 h-5" />
+            </div>
+            <span className="text-lg font-bold uppercase tracking-tighter text-gray-900 dark:text-white">
+              SeatAlloc
+            </span>
+          </div>
+
+          {/* Mobile Actions */}
+          <div className="flex items-center gap-2">
+            <motion.button
+              onClick={toggleTheme}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="p-2 rounded-lg hover:bg-gray-100/40 dark:hover:bg-gray-700/40 transition-colors"
+              aria-label="Toggle theme"
+            >
+              {theme === 'light' ? (
+                <Moon className="text-gray-700 dark:text-gray-300" size={20} />
+              ) : (
+                <Sun className="text-amber-500" size={20} />
+              )}
+            </motion.button>
+
+            {user && (
+              <motion.button
                 onClick={() => {
-                  setCurrentPage(item.page);
+                  setCurrentPage('profile');
                   setMobileMenuOpen(false);
                 }}
-                className={`block w-full text-left px-4 py-3 text-sm font-semibold rounded-lg transition-all ${
-                  currentPage === item.page
-                    ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="p-2 rounded-lg hover:bg-gray-100/40 dark:hover:bg-gray-700/40 transition-colors"
+                aria-label="Profile"
               >
-                {item.name}
-              </button>
-            ))}
+                <User className="text-gray-700 dark:text-gray-300" size={20} />
+              </motion.button>
+            )}
+
+            <motion.button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="text-gray-700 dark:text-gray-300 p-2"
+              whileTap={{ scale: 0.95 }}
+            >
+              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </motion.button>
+          </div>
+        </div>
+
+        {/* Mobile Menu Dropdown */}
+        <motion.div
+          initial={false}
+          animate={mobileMenuOpen ? { opacity: 1, height: 'auto' } : { opacity: 0, height: 0 }}
+          transition={{ duration: 0.3 }}
+          className="bg-white/40 dark:bg-phantom-black/40 border-t border-gray-200/40 dark:border-gray-700/40 overflow-hidden backdrop-blur-md"
+        >
+          <div className="px-4 py-4 space-y-2">
             {user ? (
-              <button
-                onClick={handleLogout}
-                className="block w-full text-left px-4 py-3 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
-              >
-                <LogOut className="inline mr-2" size={18} /> Logout
-              </button>
+              <>
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.page);
+
+                  return (
+                    <motion.button
+                      key={item.page}
+                      onClick={() => {
+                        setCurrentPage(item.page);
+                        setMobileMenuOpen(false);
+                      }}
+                      className={`w-full text-left px-4 py-3 rounded-lg transition-all duration-200 flex items-center gap-3 font-bold text-sm uppercase tracking-wide ${
+                        active
+                          ? 'bg-orange-100/60 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/40 dark:hover:bg-gray-700/40'
+                      }`}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <Icon className="w-5 h-5" />
+                      {item.name}
+                    </motion.button>
+                  );
+                })}
+
+                <motion.button
+                  onClick={handleLogout}
+                  className="w-full text-left px-4 py-3 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50/40 dark:hover:bg-red-900/20 transition-all duration-200 flex items-center gap-3 font-bold text-sm uppercase tracking-wide"
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <LogOut className="w-4 h-4" />
+                  Logout
+                </motion.button>
+              </>
             ) : (
               <>
-                <button
+                <motion.button
                   onClick={() => {
                     setCurrentPage('login');
                     setMobileMenuOpen(false);
                   }}
-                  className="block w-full text-center px-4 py-3 text-sm font-semibold text-orange-600 dark:text-orange-400 border-2 border-orange-600 dark:border-orange-400 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-all"
+                  className="w-full text-left px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100/40 dark:hover:bg-gray-700/40 rounded-lg font-bold text-sm uppercase tracking-wide transition-all"
+                  whileTap={{ scale: 0.98 }}
                 >
                   Login
-                </button>
-                <button
+                </motion.button>
+                <motion.button
                   onClick={() => {
                     setCurrentPage('signup');
                     setMobileMenuOpen(false);
                   }}
-                  className="block w-full text-center px-4 py-3 text-sm font-semibold bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg shadow-md hover:shadow-xl"
+                  className="w-full text-left px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100/40 dark:hover:bg-gray-700/40 rounded-lg font-bold text-sm uppercase tracking-wide transition-all"
+                  whileTap={{ scale: 0.98 }}
                 >
                   Sign Up
-                </button>
+                </motion.button>
               </>
             )}
           </div>
-        </div>
-      )}
-    </nav>
+        </motion.div>
+      </motion.nav>
+    </>
   );
 };
 
