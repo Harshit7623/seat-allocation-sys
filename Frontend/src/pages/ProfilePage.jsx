@@ -221,7 +221,7 @@ const ProfilePage = ({ showToast, setCurrentPage }) => {
                     type="text"
                     disabled
                     value={user?.fullName || ''}
-                    className="w-full px-4 py-3.5 border-2 border-[#c0c0c0] dark:border-[#8a8a8a] rounded-xl bg-gray-50 dark:bg-gray-750 cursor-not-allowed text-gray-600 dark:text-gray-400 opacity-60"
+                    className="w-full px-4 py-3.5 border-2 border-[#c0c0c0] dark:border-[#8a8a8a] rounded-xl bg-gray-100 dark:bg-gray-700 cursor-not-allowed text-gray-600 dark:text-gray-400 opacity-60"
                   />
                 </div>
               </div>
@@ -258,7 +258,7 @@ const ProfilePage = ({ showToast, setCurrentPage }) => {
                     type="text"
                     disabled
                     value={user?.role || ''}
-                    className="w-full px-4 py-3.5 border-2 border-[#c0c0c0] dark:border-[#8a8a8a] rounded-xl bg-gray-50 dark:bg-gray-750 cursor-not-allowed text-gray-600 dark:text-gray-400 capitalize opacity-60"
+                    className="w-full px-4 py-3.5 border-2 border-[#c0c0c0] dark:border-[#8a8a8a] rounded-xl bg-gray-100 dark:bg-gray-700 cursor-not-allowed text-gray-600 dark:text-gray-400 capitalize opacity-60"
                   />
                 </div>
               </div>

@@ -226,7 +226,7 @@ const AllocationPage = ({ showToast }) => {
                     <Monitor size={16} className="text-orange-500" />
                     1. Select Venue
                   </label>
-                  <select value={selectedRoomId} onChange={e=>handleRoomChange(e.target.value)} className="w-full h-12 px-4 bg-white dark:bg-gray-800 border-2 border-[#c0c0c0] dark:border-[#8a8a8a] rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all">
+                  <select value={selectedRoomId} onChange={e=>handleRoomChange(e.target.value)} className="w-full h-12 px-4 bg-white dark:bg-gray-800 border-2 border-[#c0c0c0] dark:border-[#8a8a8a] rounded-xl font-bold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all">
                      <option value="">-- Manual Configuration --</option>
                      {classrooms.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}
                   </select>
@@ -238,24 +238,41 @@ const AllocationPage = ({ showToast }) => {
                   )}
                 </div>
 
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-widest">
+                    <Database size={16} className="text-orange-500" />
+                    2. Use Student Database
+                  </label>
+                  <button 
+                    onClick={() => setUseDemoDb(!useDemoDb)} 
+                    className={`w-12 h-8 px-1 rounded-full font-bold text-white transition-all duration-300 flex items-center border-3 shadow-lg ${
+                      useDemoDb 
+                        ? 'bg-gradient-to-r from-orange-500 to-amber-500 border-orange-600 dark:border-orange-400 justify-end' 
+                        : 'bg-gray-300 dark:bg-gray-600 border-gray-400 dark:border-gray-500 justify-start'
+                    }`}
+                  >
+                    <div className={`w-6 h-6 bg-white rounded-full transition-transform duration-300 shadow-sm`}></div>
+                  </button>
+                </div>
+
                 <div>
                   <div className="flex justify-between items-center mb-3">
                      <label className="flex items-center gap-2 text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-widest">
                        <Users size={16} className="text-orange-500" />
-                       2. Configure Batches
+                       3. Configure Batches
                      </label>
-                     <input type="number" value={numBatches} onChange={e=>setNumBatches(Math.max(1, parseInt(e.target.value)||1))} className="w-14 h-9 text-center border-2 border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 dark:text-white font-bold focus:ring-2 focus:ring-orange-500" />
+                     <input type="number" value={numBatches} onChange={e=>setNumBatches(Math.max(1, parseInt(e.target.value)||1))} className="w-14 h-9 text-center border-2 border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-bold focus:ring-2 focus:ring-orange-500" />
                   </div>
                   <div className="space-y-3">
                      {batchConfigs.map((b, i) => (
                        <div key={b.id} className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-750 rounded-xl border-2 border-[#c0c0c0] dark:border-[#8a8a8a] space-y-3 hover:border-orange-500 dark:hover:border-orange-400 transition-all">
                           <div className="flex gap-2">
-                            <input value={b.label} onChange={e=>updateBatch(i,'label',e.target.value)} className="flex-1 h-9 px-3 text-xs border-2 border-[#c0c0c0] dark:border-[#8a8a8a] rounded-lg bg-white dark:bg-gray-800 dark:text-white font-bold focus:ring-2 focus:ring-orange-500" placeholder="Batch Label" />
+                            <input value={b.label} onChange={e=>updateBatch(i,'label',e.target.value)} className="flex-1 h-9 px-3 text-xs border-2 border-[#c0c0c0] dark:border-[#8a8a8a] rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-bold focus:ring-2 focus:ring-orange-500" placeholder="Batch Label" />
                             <input type="color" value={b.color} onChange={e=>updateBatch(i,'color',e.target.value)} className="w-9 h-9 p-0.5 border-2 border-[#c0c0c0] dark:border-[#8a8a8a] rounded-lg cursor-pointer" />
                           </div>
                           <div className="flex items-center gap-2">
                              <Hash size={14} className="text-orange-500"/>
-                             <input value={b.startRoll} onChange={e=>updateBatch(i,'startRoll',e.target.value)} className="flex-1 h-9 px-3 text-xs border-2 border-[#c0c0c0] dark:border-[#8a8a8a] rounded-lg bg-white dark:bg-gray-800 dark:text-white font-mono focus:ring-2 focus:ring-orange-500" placeholder="Start Roll Number" />
+                             <input value={b.startRoll} onChange={e=>updateBatch(i,'startRoll',e.target.value)} className="flex-1 h-9 px-3 text-xs border-2 border-[#c0c0c0] dark:border-[#8a8a8a] rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-mono focus:ring-2 focus:ring-orange-500" placeholder="Start Roll Number" />
                           </div>
                        </div>
                      ))}
@@ -263,11 +280,6 @@ const AllocationPage = ({ showToast }) => {
                 </div>
 
                 <div className="flex flex-col gap-3 pt-4 border-t-2 border-[#c0c0c0] dark:border-[#8a8a8a]">
-                   <label className="flex items-center gap-3 text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer hover:text-orange-600 dark:hover:text-orange-400 transition-colors">
-                     <input type="checkbox" checked={useDemoDb} onChange={e=>setUseDemoDb(e.target.checked)} className="w-5 h-5 rounded border-2 border-gray-300 text-orange-600 focus:ring-2 focus:ring-orange-500"/>
-                     <Database size={16} className="text-orange-500" />
-                     Use Student Database
-                   </label>
                    <label className="flex items-center gap-3 text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer hover:text-orange-600 dark:hover:text-orange-400 transition-colors">
                      <input type="checkbox" checked={batchByColumn} onChange={e=>setBatchByColumn(e.target.checked)} className="w-5 h-5 rounded border-2 border-gray-300 text-orange-600 focus:ring-2 focus:ring-orange-500"/>
                      <Layout size={16} className="text-orange-500" />

@@ -201,73 +201,25 @@ const DashboardPage = ({ setCurrentPage }) => {
         </div>
 
         {/* Activity and Chart Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
           
-          {/* Chart Area */}
-          <div className="lg:col-span-2 glass-card min-h-[400px] p-6 border border-[#c0c0c0] dark:border-[#8a8a8a] shadow-[0_0_28px_rgba(192,192,192,0.2)] dark:shadow-[0_0_28px_rgba(138,138,138,0.24)] flex flex-col relative overflow-hidden">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Allocation Velocity</h2>
-              <div className="flex gap-2">
-                {['1H', '24H', '7D', '30D'].map((t, i) => (
-                  <button 
-                    key={t} 
-                    className={`px-3 py-1 rounded-lg text-xs font-mono transition-colors ${
-                      i === 1 
-                        ? 'bg-orange-500 text-white' 
-                        : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600'
-                    }`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-            
-            {/* Decorative Graph */}
-            <div className="flex-1 w-full relative">
-              <svg className="w-full h-full" viewBox="0 0 800 300" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="gradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="rgb(249, 115, 22)" stopOpacity="0.5" />
-                    <stop offset="100%" stopColor="rgb(249, 115, 22)" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                <path 
-                  d="M0,250 C100,200 200,280 300,150 C400,20 500,100 600,80 C700,60 800,100 800,100 V300 H0 Z" 
-                  fill="url(#gradient)" 
-                  className="opacity-20"
-                />
-                <path 
-                  d="M0,250 C100,200 200,280 300,150 C400,20 500,100 600,80 C700,60 800,100 800,100" 
-                  fill="none" 
-                  stroke="rgb(249, 115, 22)" 
-                  strokeWidth="3"
-                  vectorEffect="non-scaling-stroke"
-                />
-              </svg>
-              
-              {/* Data Point */}
-              <div className="absolute top-1/2 left-1/3 w-3 h-3 bg-orange-500 rounded-full shadow-[0_0_15px_rgba(249,115,22,1)] border-2 border-white dark:border-gray-800"></div>
-            </div>
-          </div>
-
           {/* Terminal Log */}
-          <div className="glass-card p-6 border border-[#c0c0c0] dark:border-[#8a8a8a] shadow-[0_0_28px_rgba(192,192,192,0.2)] dark:shadow-[0_0_28px_rgba(138,138,138,0.24)] flex flex-col h-[400px]">
+          <div className="glass-card p-6 border border-[#c0c0c0] dark:border-[#8a8a8a] shadow-[0_0_28px_rgba(192,192,192,0.2)] dark:shadow-[0_0_28px_rgba(138,138,138,0.24)] flex flex-col min-h-[400px]">
             <div className="flex items-center gap-2 mb-6 pb-4 border-b border-[#c0c0c0] dark:border-[#8a8a8a]">
               <Terminal className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-              <h2 className="text-sm font-bold tracking-widest uppercase text-gray-900 dark:text-gray-100">System Log</h2>
+              <h2 className="text-xl font-bold tracking-widest uppercase text-gray-900 dark:text-gray-100">System Log</h2>
             </div>
             
-            <div className="flex-1 overflow-y-auto pr-2 space-y-4 font-mono text-sm">
+            <div className="flex-1 overflow-y-auto pr-2 space-y-4 font-mono text-xl">
               {activityLog.map((log, i) => (
                 <div
                   key={log.id}
                   className="flex gap-3 group animate-fadeIn"
                   style={{ animationDelay: `${i * 0.1}s` }}
                 >
-                  <div className="w-20 text-[10px] text-gray-500 dark:text-gray-400 pt-1 shrink-0">{log.time}</div>
-                  <div className="flex flex-col">
-                    <span className={`text-xs ${
+                  <div className="w-28 text-base text-gray-500 dark:text-gray-400 pt-1 shrink-0 flex-none">{log.time}</div>
+                  <div className="flex flex-col flex-1 min-w-0">
+                    <span className={`text-lg break-words ${
                       log.type === 'warning' ? 'text-amber-500' :
                       log.type === 'success' ? 'text-emerald-500' :
                       log.type === 'process' ? 'text-orange-500' :
