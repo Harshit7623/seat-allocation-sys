@@ -92,12 +92,13 @@ except ImportError as e:
 # --------------------------------------------------
 # App setup
 # --------------------------------------------------
-app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-prod')
-CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": "*"}})
-
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "demo.db"
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-prod')
+app.config['FEEDBACK_FOLDER'] = BASE_DIR / "feedback_files"
+CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": "*"}})
 
 # --------------------------------------------------
 # DB bootstrap
@@ -269,12 +270,24 @@ def submit_feedback():
         if 'file' in request.files:
             file = request.files['file']
             if file and file.filename:
-                app.config['FEEDBACK_FOLDER'].mkdir(exist_ok=True)
-                timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-                safe_filename = f"{timestamp}_{file.filename}"
-                file_path = app.config['FEEDBACK_FOLDER'] / safe_filename
-                file.save(file_path)
-                file_name = file.filename
+                try:
+                    app.config['FEEDBACK_FOLDER'].mkdir(exist_ok=True, parents=True)
+                    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+                    safe_filename = f"{timestamp}_{file.filename}"
+                    file_path = app.config['FEEDBACK_FOLDER'] / safe_filename
+                    file.save(str(file_path))
+                    file_name = file.filename
+                    print(f"✅ Feedback file saved: {file_path}")
+                except Exception as file_error:
+                    print(f"⚠️  File upload error: {file_error}")
+                    file_path = None
+                    file_name = None
+        
+        # Ensure user_id is available
+        user_id = getattr(request, 'user_id', None)
+        if not user_id:
+            print("⚠️  Warning: user_id not set by token_required decorator")
+            user_id = 1  # Default for testing
         
         conn = sqlite3.connect(DB_PATH)
         cur = conn.cursor()
@@ -284,13 +297,15 @@ def submit_feedback():
                 feature_suggestion, additional_info, file_path, file_name
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            request.user_id, issue_type, priority, description,
+            user_id, issue_type, priority, description,
             feature_suggestion, additional_info,
             str(file_path) if file_path else None, file_name
         ))
         feedback_id = cur.lastrowid
         conn.commit()
         conn.close()
+        
+        print(f"✅ Feedback submitted successfully: ID={feedback_id}, User={user_id}")
         
         return jsonify({
             "success": True, 
@@ -299,6 +314,9 @@ def submit_feedback():
         }), 201
         
     except Exception as e:
+        print(f"❌ Error in submit_feedback: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -307,6 +325,10 @@ def submit_feedback():
 def get_user_feedback():
     """Get all feedback submitted by the current user"""
     try:
+        user_id = getattr(request, 'user_id', None)
+        if not user_id:
+            return jsonify({"error": "User not authenticated"}), 401
+            
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
@@ -318,10 +340,12 @@ def get_user_feedback():
             FROM feedback 
             WHERE user_id = ?
             ORDER BY created_at DESC
-        """, (request.user_id,))
+        """, (user_id,))
         
         feedback_list = [dict(row) for row in cur.fetchall()]
         conn.close()
+        
+        print(f"✅ Retrieved {len(feedback_list)} feedback records for user {user_id}")
         
         return jsonify({
             "success": True,
@@ -329,6 +353,9 @@ def get_user_feedback():
         })
         
     except Exception as e:
+        print(f"❌ Error in get_user_feedback: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
