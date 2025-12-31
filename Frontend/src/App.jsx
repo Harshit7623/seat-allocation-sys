@@ -23,6 +23,7 @@ import AboutusPage from './pages/AboutusPage';
 import TemplateEditor from './pages/TemplateEditor';
 import AttendancePage from './pages/AttendencePage';
 import ClassroomPage from './pages/ClassroomPage';
+import DatabaseManager from './pages/DatabaseManager';
 
 // -------------------------------------------------------------------
 // THEME TOGGLE (optional, kept for completeness)
@@ -107,6 +108,10 @@ const AppContent = () => {
       'allocation',
       'template-editor',
       'attendence',
+      'database-manager',
+      'classroom',
+      'create-plan',
+      'feedback',
     ];
 
     if (!user && protectedPages.includes(currentPage)) {
@@ -178,6 +183,8 @@ const AppContent = () => {
         return <TemplateEditor showToast={showToast} />;
       case 'attendence':
         return <AttendancePage showToast={showToast} />;
+      case 'database-manager':
+        return <DatabaseManager setCurrentPage={setCurrentPage} showToast={showToast} />;
       default:
         return <LandingPage setCurrentPage={setCurrentPage} />;
     }
