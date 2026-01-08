@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SplitText from '../components/SplitText';
-import { Upload, Layout, Monitor, Clock, ArrowRight, Loader2, AlertCircle, CheckCircle2, Users, Download, Eye, RefreshCw, X, FileText, BarChart3 } from 'lucide-react';
+// Added Wrench icon for the Custom Build box
+import { Upload, Layout, Monitor, Clock, ArrowRight, Loader2, AlertCircle, CheckCircle2, Users, Download, Eye, RefreshCw, X, FileText, BarChart3, Wrench } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const CreatePlan = ({ showToast }) => {
@@ -184,6 +185,8 @@ const CreatePlan = ({ showToast }) => {
   const goAllocate = () => navigate('/allocation');
   const goUpload = () => navigate('/upload');
   const goClassroom = () => navigate('/classroom');
+  // New Navigation function
+  const goManual = () => navigate('/manual-allocation');
 
   const actions = [
     {
@@ -194,6 +197,15 @@ const CreatePlan = ({ showToast }) => {
       bgColor: 'bg-orange-500 dark:bg-orange-600',
       hoverBorder: 'hover:border-orange-500 dark:hover:border-orange-400',
       onClick: goAllocate
+    },
+    {
+      title: 'Custom Build', // New Box added here
+      description: 'Build grid from scratch',
+      icon: Wrench,
+      color: 'blue',
+      bgColor: 'bg-blue-600 dark:bg-blue-700',
+      hoverBorder: 'hover:border-blue-600 dark:hover:border-blue-500',
+      onClick: goManual
     },
     {
       title: 'Upload Data',
@@ -307,8 +319,8 @@ const CreatePlan = ({ showToast }) => {
           </div>
         </div>
 
-        {/* Action Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Action Cards Grid - Updated to md:grid-cols-4 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
           {actions.map((action, index) => (
             <button
               key={index}
@@ -324,7 +336,7 @@ const CreatePlan = ({ showToast }) => {
               <div className={`absolute inset-0 ${action.bgColor} opacity-0 group-hover:opacity-5 transition-opacity duration-300`}></div>
               
               <div className="absolute top-0 right-0 p-4 opacity-5 transform rotate-12 group-hover:scale-110 transition-transform duration-500">
-                <action.icon className="w-32 h-32 text-gray-900 dark:text-gray-100" />
+                <action.icon className="w-24 h-24 text-gray-900 dark:text-gray-100" />
               </div>
 
               <div className="relative z-10 flex flex-col items-start gap-4">
@@ -333,10 +345,10 @@ const CreatePlan = ({ showToast }) => {
                 </div>
 
                 <div className="flex-1 text-left">
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
                     {action.title}
                   </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
                     {action.description}
                   </p>
                 </div>
@@ -346,7 +358,7 @@ const CreatePlan = ({ showToast }) => {
                     className={`text-gray-400 group-hover:text-orange-500 group-hover:translate-x-1 transition-all duration-300 ${
                       hoveredCard === index ? 'opacity-100' : 'opacity-0'
                     }`} 
-                    size={20} 
+                    size={18} 
                   />
                 </div>
               </div>
@@ -542,15 +554,21 @@ const CreatePlan = ({ showToast }) => {
                           )}
                         </div>
 
+                        <div className="flex items-center gap-3">
+                        <span className="text-xs font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400 bg-orange-500/10 px-4 py-2 rounded-lg border border-orange-500/20">
+                          {plan.type || 'Manual'}
+                        </span>
                         <ArrowRight 
                           className={`text-gray-400 group-hover:text-orange-500 group-hover:translate-x-1 transition-all duration-300 ${
                             hoveredPlan === idx ? 'opacity-100' : 'opacity-50'
                           }`} 
                           size={20} 
-                        />
+                         />
+                       </div>
                       </div>
                     </div>
                   </div>
+                  
                 );
               })}
             </div>
@@ -751,7 +769,6 @@ const CreatePlan = ({ showToast }) => {
             transform: translateY(0);
           }
         }
-
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }

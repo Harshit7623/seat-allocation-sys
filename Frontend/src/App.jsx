@@ -27,6 +27,7 @@ import TemplateEditor from './pages/TemplateEditor';
 import AttendancePage from './pages/AttendencePage';
 import ClassroomPage from './pages/ClassroomPage';
 import DatabaseManager from './pages/DatabaseManager';
+import ManualAllocation from './pages/ManualAllocation';
 
 // -------------------------------------------------------------------
 // PROTECTED ROUTE COMPONENT
@@ -114,6 +115,10 @@ const AppContent = () => {
 
           <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage showToast={showToast} /></ProtectedRoute>} />
+          <Route 
+            path="/manual-allocation" 
+            element={<ProtectedRoute><ManualAllocation showToast={showToast} /></ProtectedRoute>} 
+          />
           <Route path="/upload" element={<ProtectedRoute><UploadPage showToast={showToast} /></ProtectedRoute>} />
           <Route path="/allocation" element={<ProtectedRoute><Allocation showToast={showToast} /></ProtectedRoute>} />
           <Route path="/create-plan" element={<ProtectedRoute><CreatePlan /></ProtectedRoute>} />

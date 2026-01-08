@@ -94,7 +94,7 @@ const UploadPage = ({ showToast }) => {
       if (enrollmentColumn.trim()) formData.append('enrollmentColumn', enrollmentColumn.trim());
 
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/upload', {
+      const response = await fetch('/api/upload', {
         method: 'POST',
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
         body: formData
@@ -128,7 +128,7 @@ const UploadPage = ({ showToast }) => {
         payload.session_id = session.session_id;
       }
       
-      const response = await fetch('http://localhost:5000/api/commit-upload', {
+      const response = await fetch('/api/commit-upload', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

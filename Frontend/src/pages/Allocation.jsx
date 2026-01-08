@@ -76,7 +76,7 @@ const AllocationPage = ({ showToast }) => {
   useEffect(() => {
     const loadSession = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/sessions/active');
+        const res = await fetch('/api/sessions/active');
         const data = await res.json();
         
         if (data.success && data.session_data) {
@@ -102,7 +102,7 @@ const AllocationPage = ({ showToast }) => {
     
     setLoadingBatches(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/sessions/${sessionId}/uploads`);
+      const res = await fetch(`/api/sessions/${sessionId}/uploads`);
       const data = await res.json();
       
       if (data.success && Array.isArray(data.uploads)) {
@@ -119,7 +119,7 @@ const AllocationPage = ({ showToast }) => {
 
   // Load classrooms
   useEffect(() => {
-    fetch('http://localhost:5000/api/classrooms')
+    fetch('/api/classrooms')
       .then(res => res.json())
       .then(data => setClassrooms(Array.isArray(data) ? data : []))
       .catch(err => {
@@ -269,7 +269,7 @@ const AllocationPage = ({ showToast }) => {
     
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/generate-seating", {
+      const res = await fetch("/api/generate-seating", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(preparePayload())
@@ -302,7 +302,7 @@ const AllocationPage = ({ showToast }) => {
     setLoading(true);
     try {
       const res = await fetch(
-        `http://localhost:5000/api/sessions/${session.session_id}/allocate-room`,
+        `/api/sessions/${session.session_id}/allocate-room`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -316,7 +316,7 @@ const AllocationPage = ({ showToast }) => {
       if (!res.ok) throw new Error(data.error || "Allocation failed");
 
       // Refresh session
-      const sessionRes = await fetch('http://localhost:5000/api/sessions/active');
+      const sessionRes = await fetch('/api/sessions/active');
       const sessionData = await sessionRes.json();
       if (sessionData.success) {
         setSession(sessionData.session_data);
@@ -355,13 +355,13 @@ const AllocationPage = ({ showToast }) => {
     setUndoing(true);
     try {
       const res = await fetch(
-        `http://localhost:5000/api/sessions/${session.session_id}/undo`,
+        `/api/sessions/${session.session_id}/undo`,
         { method: 'POST' }
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      const sessionRes = await fetch('http://localhost:5000/api/sessions/active');
+      const sessionRes = await fetch('/api/sessions/active');
       const sessionData = await sessionRes.json();
       if (sessionData.success) {
         setSession(sessionData.session_data);
@@ -396,7 +396,7 @@ const AllocationPage = ({ showToast }) => {
     setLoading(true);
     try {
       const res = await fetch(
-        `http://localhost:5000/api/sessions/${session.session_id}/finalize`, 
+        `/api/sessions/${session.session_id}/finalize`, 
         { method: 'POST' }
       );
       const data = await res.json();
@@ -424,7 +424,7 @@ const AllocationPage = ({ showToast }) => {
     setResetting(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch("http://localhost:5000/api/reset-data", {
+      const res = await fetch("/api/reset-data", {
         method: "POST",
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
@@ -446,7 +446,7 @@ const AllocationPage = ({ showToast }) => {
   const fetchStats = async () => {
     if (!session?.session_id) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/sessions/${session.session_id}/stats`);
+      const res = await fetch(`/api/sessions/${session.session_id}/stats`);
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error);
       setStats(data.stats);
@@ -468,7 +468,7 @@ const AllocationPage = ({ showToast }) => {
     try {
       const payload = preparePayload();
       payload.seating = webData.seating;
-      const res = await fetch('http://localhost:5000/api/generate-pdf', {
+      const res = await fetch('/api/generate-pdf', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload)
