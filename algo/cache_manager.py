@@ -38,40 +38,52 @@ class CacheManager:
             }
         return {"degree": "B.Tech", "branch": "N/A", "joining_year": "2024"}
 
-    def save_or_update(self, plan_id, input_config, output_data):
+    def save_or_update(self, plan_id, input_config, output_data, room_no="N/A"):
         """
-        Save allocation snapshot for PDF/attendance generation
-        This is the ONLY file-based cache we need
+        Save allocation snapshot with a nested Room Layer.
+        Supports split batches where students of the same batch are in different rooms.
         """
         # Flatten seating
         all_seats = [seat for row in output_data.get('seating', []) for seat in row 
                      if seat and not seat.get('is_broken') and not seat.get('is_unallocated')]
 
-        # Extract structured batches
-        batches = {}
+        # Create the Room-specific batch structure
+        room_batches = {}
         for student in all_seats:
             label = student.get('batch_label', 'Unknown')
-            if label not in batches:
+            if label not in room_batches:
                 academic_info = self._parse_enrollment(student.get('roll_number'))
-                batches[label] = {
+                room_batches[label] = {
                     "info": academic_info,
                     "students": []
                 }
-            batches[label]["students"].append(student)
+            
+            # Ensure the student record itself knows which room it's in
+            student['room_no'] = room_no
+            room_batches[label]["students"].append(student)
 
         # Sort students within batches
-        for label in batches:
-            batches[label]["students"].sort(key=lambda x: x.get('roll_number', ''))
+        for label in room_batches:
+            room_batches[label]["students"].sort(key=lambda x: x.get('roll_number', ''))
 
         payload = {
             "metadata": {
                 "plan_id": plan_id,
+                "room_no": room_no,
                 "last_updated": datetime.now().isoformat(),
                 "total_students": len(all_seats),
-                "type": "structured_seating_snapshot"
+                "type": "nested_room_snapshot"
             },
-            "inputs": input_config,
-            "batches": batches,
+            "inputs": {
+                **input_config,
+                "room_no": room_no # Redundancy for easy frontend access
+            },
+            "rooms": {
+                room_no: {
+                    "batches": room_batches,
+                    "student_count": len(all_seats)
+                }
+            },
             "raw_matrix": output_data.get('seating')
         }
         
@@ -107,6 +119,7 @@ class CacheManager:
                         data = json.load(f)
                         snapshots.append({
                             'plan_id': data['metadata']['plan_id'],
+                            'room_no': data['metadata'].get('room_no', 'N/A'),
                             'last_updated': data['metadata']['last_updated'],
                             'total_students': data['metadata']['total_students']
                         })

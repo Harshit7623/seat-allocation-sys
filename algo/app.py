@@ -2603,7 +2603,14 @@ def generate_seating():
         web["validation"] = {"is_valid": ok, "errors": errors}
         
         # Cache result
-        cache_manager.save_or_update(plan_id, data, web)
+        room_name = data.get('room_no') or data.get('room_name') or "N/A"
+        # UPDATE THIS LINE:
+        cache_manager.save_or_update(
+          plan_id=plan_id, 
+          input_config=data, 
+          output_data=web, 
+        room_no=room_name  # Add this argument
+        )
         
         logger.info(f"✅ Seating generated for: {selected_batch_names}")
         
@@ -2897,30 +2904,41 @@ def get_all_allocations():
 def get_plan_batches(plan_id):
     """
     Get batch information for a plan (for attendance sheets).
-    
-    Returns:
-        JSON with plan_id, batches, and room_no
     """
     try:
         cache_data = cache_manager.load_snapshot(plan_id)
         if not cache_data:
             return jsonify({"error": "Plan not found"}), 404
         
-        batch_list = {}
-        for label, data in cache_data.get('batches', {}).items():
-            batch_list[label] = data.get('info', {})
+        # 1. Identify which room we are looking for
+        room_no = cache_data.get('metadata', {}).get('room_no') or \
+                  cache_data.get('inputs', {}).get('room_no')
         
+        # 2. Extract the batches specifically for that room
+        # Based on your JSON structure: cache_data['rooms']['M102']['batches']
+        all_rooms = cache_data.get('rooms', {})
+        batch_list = {}
+        
+        if room_no in all_rooms:
+            batch_list = all_rooms[room_no].get('batches', {})
+        elif all_rooms:
+            # Fallback: if room_no mismatch, grab batches from the first room available
+            first_room = list(all_rooms.values())[0]
+            batch_list = first_room.get('batches', {})
+
+        # 3. Return a flattened structure the frontend understands
         return jsonify({
             "plan_id": plan_id,
             "batches": batch_list,
-            "room_no": cache_data.get('inputs', {}).get('room_id', 'N/A')
+            "room_no": room_no,
+            "inputs": cache_data.get('inputs', {}),
+            "metadata": cache_data.get('metadata', {})
         })
         
     except Exception as e:
         logger.error(f"Get plan batches error: {e}")
         return jsonify({"error": str(e)}), 500
-
-
+    
 # ============================================================================
 # GET: Retrieve user's template configuration
 # ============================================================================
@@ -3467,15 +3485,30 @@ def export_attendance():
         data = request.get_json()
         plan_id = data.get('plan_id')
         batch_name = data.get('batch_name')
-        frontend_metadata = data.get('metadata', {})  # ✅ Get metadata
+        frontend_metadata = data.get('metadata', {})
+        # Use room_no from frontend metadata to find the right folder in cache
+        room_no = frontend_metadata.get('room_no', 'N/A')
 
         # Load cached seating plan
         cache_data = cache_manager.load_snapshot(plan_id)
         if not cache_data:
             return jsonify({"error": "Seating plan cache not found"}), 404
 
-        # Get batch data
-        batch_data = cache_data.get('batches', {}).get(batch_name)
+        # FIX: Navigate the nested rooms structure
+        # Structure is cache_data['rooms'][room_no]['batches'][batch_name]
+        room_data = cache_data.get('rooms', {}).get(room_no)
+        
+        # Fallback: If room_no doesn't match, search all rooms for the batch
+        if not room_data:
+            for r_name, r_content in cache_data.get('rooms', {}).items():
+                if batch_name in r_content.get('batches', {}):
+                    room_data = r_content
+                    break
+
+        if not room_data:
+            return jsonify({"error": f"Room data for {room_no} not found"}), 404
+
+        batch_data = room_data.get('batches', {}).get(batch_name)
         if not batch_data:
             return jsonify({"error": f"Batch '{batch_name}' not found"}), 404
 
@@ -3492,17 +3525,15 @@ def export_attendance():
             batch_data['info']
         )
 
-        # Read PDF into memory
         return_data = io.BytesIO()
         with open(temp_filename, 'rb') as f:
             return_data.write(f.read())
         return_data.seek(0)
         
-        # Clean up temp file
         if os.path.exists(temp_filename):
             os.remove(temp_filename)
 
-        logger.info(f"📋 Generated attendance sheet for {batch_name}")
+        logger.info(f"📋 Generated attendance sheet for {batch_name} in Room {room_no}")
 
         return send_file(
             return_data,
@@ -3513,11 +3544,8 @@ def export_attendance():
 
     except Exception as e:
         logger.error(f"Export attendance error: {str(e)}")
-        import traceback
-        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-
-
+    
 # ============================================================================
 # AUTH ROUTES (OPTIONAL - IF AUTH MODULE AVAILABLE)
 # ============================================================================
