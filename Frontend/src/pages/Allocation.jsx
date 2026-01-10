@@ -67,6 +67,7 @@ const AllocationPage = ({ showToast }) => {
   const [showStats, setShowStats] = useState(false);
   const [stats, setStats] = useState(null);
   const [usedRoomIds, setUsedRoomIds] = useState([]);
+  const [selectedRoomName, setSelectedRoomName] = useState("");
 
   const chartRef = useRef();
 
@@ -162,6 +163,7 @@ const AllocationPage = ({ showToast }) => {
   const handleRoomChange = (roomId) => {
     if (!roomId) {
       setSelectedRoomId("");
+      setSelectedRoomName(""); // Reset name
       return;
     }
     
@@ -174,6 +176,7 @@ const AllocationPage = ({ showToast }) => {
     setSelectedRoomId(roomId);
     const room = classrooms.find(r => r.id === roomIdNum);
     if (room) {
+      setSelectedRoomName(room.name); // <--- CAPTURE NAME HERE
       setRows(room.rows);
       setCols(room.cols);
       setBrokenSeats(room.broken_seats || "");
@@ -234,6 +237,7 @@ const AllocationPage = ({ showToast }) => {
     return {
       session_id: session?.session_id,
       plan_id: session?.plan_id,
+      room_no: selectedRoomName, // <--- ADD THIS LINE
       rows,
       cols,
       block_width: blockWidth,
@@ -308,6 +312,7 @@ const AllocationPage = ({ showToast }) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             classroom_id: parseInt(selectedRoomId, 10),
+            room_no: selectedRoomName || 'UnKnown', // <--- ADD THIS LINE
             seating_data: webData
           })
         }

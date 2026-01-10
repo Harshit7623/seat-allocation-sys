@@ -35,17 +35,47 @@ const AttendancePage = ({ showToast }) => {
     setLoading(true);
     try {
       const response = await fetch(`/api/plan-batches/${planId}`);
-      if (!response.ok) throw new Error("Could not load plan data. Ensure you generated a plan first.");
+      if (!response.ok) throw new Error("Could not load plan data.");
       
       const data = await response.json();
-      // Ensure we set an empty object if batches is null/undefined to prevent mapping errors
-      setBatchGroups(data?.batches || {});
-      setRoomName(data?.room_name || "N/A");
+
+      // 1. Identify Room Name from metadata/inputs
+      let actualRoom = data?.metadata?.room_no || data?.inputs?.room_no;
       
-      if (showToast) showToast("Attendance data loaded", "success");
+      // 2. Extract batches using the room key
+      let extractedBatches = {};
+
+      if (data?.rooms) {
+        // If actualRoom is known, get those batches
+        if (actualRoom && data.rooms[actualRoom]) {
+          extractedBatches = data.rooms[actualRoom].batches || {};
+        } 
+        // Fallback: If room name is missing but rooms exist, take the first room found
+        else {
+          const firstRoomKey = Object.keys(data.rooms)[0];
+          if (firstRoomKey) {
+            actualRoom = firstRoomKey;
+            extractedBatches = data.rooms[firstRoomKey].batches || {};
+          }
+        }
+      } else if (data?.batches) {
+        // Fallback for flattened structure
+        extractedBatches = data.batches;
+      }
+
+      setRoomName(actualRoom || "N/A");
+      setBatchGroups(extractedBatches);
+
+      if (showToast) {
+        if (Object.keys(extractedBatches).length > 0) {
+          showToast(`Loaded data for Room: ${actualRoom}`, "success");
+        } else {
+          showToast("No batch data found in this plan.", "warning");
+        }
+      }
     } catch (err) {
-      if (showToast) showToast(err.message, "error");
-      setTimeout(() => navigate('/allocation'), 2000);
+      console.error("Fetch error:", err);
+      if (showToast) showToast("Error: " + err.message, "error");
     } finally {
       setLoading(false);
     }
@@ -181,43 +211,47 @@ const AttendancePage = ({ showToast }) => {
         <div className="space-y-4">
           <h2 className="text-xs font-black text-orange-500 uppercase tracking-[0.2em] ml-1">Step 2: Export by Batch</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {Object.entries(batchGroups).map(([label, data]) => (
-              <motion.div 
-                key={label}
-                whileHover={{ y: -5 }}
-                className="bg-white dark:bg-gray-800 rounded-3xl border-2 border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm hover:shadow-xl transition-all"
-              >
-                <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      {/* FIXED: Added Optional Chaining here */}
-                      <span className="px-3 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-full text-[10px] font-black uppercase tracking-wider">
-                        {data?.info?.degree || "N/A"}
-                      </span>
-                      <h3 className="text-xl font-black dark:text-white mt-2">{label}</h3>
+            {Object.entries(batchGroups).length > 0 ? (
+              Object.entries(batchGroups).map(([label, data]) => (
+                <motion.div 
+                  key={label}
+                  whileHover={{ y: -5 }}
+                  className="bg-white dark:bg-gray-800 rounded-3xl border-2 border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm hover:shadow-xl transition-all"
+                >
+                  <div className="p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <span className="px-3 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-full text-[10px] font-black uppercase tracking-wider">
+                          {data?.info?.degree || "N/A"}
+                        </span>
+                        <h3 className="text-xl font-black dark:text-white mt-2">{label}</h3>
+                      </div>
+                      <button onClick={() => handlePreview(label)} className="p-2 text-gray-400 hover:text-orange-500 transition-colors">
+                        <Eye size={20} />
+                      </button>
                     </div>
-                    <button onClick={() => handlePreview(label)} className="p-2 text-gray-400 hover:text-orange-500 transition-colors">
-                      <Eye size={20} />
+                    
+                    <div className="space-y-1 mb-6">
+                      <p className="text-xs text-gray-500 font-medium italic">{data?.info?.branch || "General"}</p>
+                      <p className="text-sm font-bold dark:text-gray-300">{data?.students?.length || 0} Students</p>
+                    </div>
+
+                    <button 
+                      onClick={() => handleDownloadSingle(label)}
+                      disabled={actionLoading === label}
+                      className="w-full py-4 bg-gray-900 dark:bg-orange-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 hover:bg-orange-500 dark:hover:bg-orange-600 transition-all disabled:opacity-50"
+                    >
+                      {actionLoading === label ? <Loader2 className="animate-spin" size={16}/> : <FileDown size={16}/>}
+                      Download PDF
                     </button>
                   </div>
-                  
-                  <div className="space-y-1 mb-6">
-                    {/* FIXED: Added Optional Chaining here */}
-                    <p className="text-xs text-gray-500 font-medium italic">{data?.info?.branch || "General"}</p>
-                    <p className="text-sm font-bold dark:text-gray-300">{data?.students?.length || 0} Students</p>
-                  </div>
-
-                  <button 
-                    onClick={() => handleDownloadSingle(label)}
-                    disabled={actionLoading === label}
-                    className="w-full py-4 bg-gray-900 dark:bg-orange-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 hover:bg-orange-500 dark:hover:bg-orange-600 transition-all disabled:opacity-50"
-                  >
-                    {actionLoading === label ? <Loader2 className="animate-spin" size={16}/> : <FileDown size={16}/>}
-                    Download PDF
-                  </button>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              ))
+            ) : (
+              <div className="col-span-full py-12 text-center bg-gray-100 dark:bg-gray-900 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
+                <p className="text-gray-400 font-bold uppercase tracking-widest">No batches found for this room</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
