@@ -2,6 +2,8 @@
 sidebar_position: 4
 ---
 
+import ComplexityCards from '@site/src/components/complexitycards';
+
 # System Architecture
 
 Complete system design and data flow documentation.
@@ -24,11 +26,11 @@ graph TB
     linkStyle default stroke:#ff9800,stroke-width:4px,fill:none
 
     %% CLIENT LAYER (Horizontal)
-    subgraph Client["<div style='font-size: 24px; color: #ff9800;'>🖥️ CLIENT LAYER<br/><br/></div>"]
+    subgraph Client[" "]
  direction TB
         style Client fill:transparent,stroke-width:0px,color:#ff9800
         %% --- 1. THE NEW BOX ABOVE ---
-        NEW_BOX["I AM THE TOP BOX"]:::client
+        
         %% --- 2. THE ROW BELOW (Nested Subgraph) ---
         subgraph ClientRow[" "]
             direction LR
@@ -46,7 +48,7 @@ graph TB
        
     %% API LAYER (Vertical with Router)
     %% Moved label to side using spaces to avoid arrow overlap
-    subgraph API["<div style='font-size: 24px; color: #ff9800; padding-left: 45px;'>⚡ API LAYER - Flask</div>"]
+    subgraph API[" "]
         direction TB
         style API fill:transparent,stroke-width:0px,color:#ff9800
         
@@ -68,10 +70,9 @@ graph TB
     
     %% ALGORITHM LAYER (Bottom)
     %% Shift Left via padding-right
-    subgraph Algorithm["<div style='font-size: 24px; color: #ff9800; '>🧠 ALGORITHM LAYER - Python</div>"]
+    subgraph Algorithm[" "]
         direction TB
         style Algorithm fill:transparent,stroke-width:0px,color:#ff9800
-        BLANK_BOX[" "]:::transparentBox
 
         
         SA["SeatingAlgorithm"]:::algo
@@ -375,34 +376,8 @@ erDiagram
         timestamp created_at
     }
 ```
-
-## Performance Analysis
-
-### Time Complexity
-
-| Operation | Complexity | Details |
-|---|---|---|
-| Initialization | O(rows × cols) | Grid creation |
-| Batch Assignment | O(cols) | Column distribution |
-| Seat Allocation | O(rows × cols) | Fill seats |
-| Validation | O(rows × cols) | Check constraints |
-| Overall | O(rows × cols) | Linear in grid size |
-
-### Space Complexity
-
-| Component | Complexity | Details |
-|---|---|---|
-| Seating Grid | O(rows × cols) | 2D array |
-| Student Mapping | O(total_students) | Tracking allocations |
-| Overall | O(rows × cols) | Dominated by grid |
-
-### Performance Benchmarks
-
-| Grid Size | Time | Memory | Notes |
-|---|---|---|---|
-| 10×10 | < 10ms | < 1MB | Small classroom |
-| 50×50 | < 50ms | < 5MB | Large classroom |
-| 100×100 | < 100ms | < 15MB | Extra large |
+### System Performance Metrics
+<ComplexityCards />
 
 ## Extension Points
 
@@ -459,19 +434,6 @@ graph TB
     D --> F
     G --> I
 ```
-
-## Deployment Checklist
-
-- [ ] Backend environment variables configured
-- [ ] Database initialized and migrated
-- [ ] Frontend build optimized
-- [ ] API CORS settings correct
-- [ ] PDF export tested
-- [ ] Authentication system verified
-- [ ] Load testing completed
-- [ ] Error logging configured
-- [ ] Documentation updated
-- [ ] Backup strategy in place
 
 ---
 
