@@ -50,6 +50,162 @@ from attendence_gen.attend_gen import create_attendance_pdf
 cache_manager = CacheManager()
 
 # ============================================================================
+# HYBRID CACHING HELPERS FOR PDF GENERATION
+# ============================================================================
+def get_seating_from_cache(plan_id: str, room_no: Optional[str] = None) -> Optional[Dict]:
+    """
+    Retrieve seating data from cache.
+    
+    Args:
+        plan_id: Plan ID to lookup
+        room_no: Optional specific room. If None, use latest room.
+    
+    Returns:
+        Dict with 'seating' and 'metadata' or None if not found
+    """
+    try:
+        snapshot = cache_manager.load_snapshot(plan_id)
+        if not snapshot:
+            return None
+        
+        # Determine which room to use
+        if not room_no:
+            room_no = snapshot.get('metadata', {}).get('latest_room')
+        
+        if not room_no or room_no not in snapshot.get('rooms', {}):
+            # Fallback to first available room
+            rooms = snapshot.get('rooms', {})
+            if rooms:
+                room_no = next(iter(rooms.keys()))
+            else:
+                return None
+        
+        room_data = snapshot['rooms'][room_no]
+        
+        return {
+            'seating': room_data.get('raw_matrix', []),
+            'metadata': snapshot.get('metadata', {}),
+            'batches': room_data.get('batches', {}),
+            'room_no': room_no,
+            'source': 'cache'
+        }
+    except Exception as e:
+        logger.warning(f"⚠️ Cache retrieval failed for plan {plan_id}: {e}")
+        return None
+
+
+def get_seating_from_database(session_id: int) -> Optional[Dict]:
+    """
+    Retrieve seating data from database allocations.
+    Fallback when cache is unavailable.
+    
+    Args:
+        session_id: Session ID to lookup
+    
+    Returns:
+        Dict with seating and metadata or None
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        
+        # Get session info
+        cur.execute("""
+            SELECT plan_id, total_students, allocated_count
+            FROM allocation_sessions
+            WHERE session_id = ?
+        """, (session_id,))
+        
+        session_row = cur.fetchone()
+        if not session_row:
+            conn.close()
+            return None
+        
+        plan_id = session_row['plan_id']
+        
+        # Try cache first (preferred)
+        cached = get_seating_from_cache(plan_id)
+        if cached:
+            conn.close()
+            return cached
+        
+        # Fallback: Build from database
+        cur.execute("""
+            SELECT a.seat_position, a.paper_set, a.enrollment, s.name, s.batch_name, c.name as room_name
+            FROM allocations a
+            JOIN students s ON a.student_id = s.id
+            LEFT JOIN classrooms c ON a.classroom_id = c.id
+            WHERE a.session_id = ?
+            ORDER BY c.name, a.seat_position
+        """, (session_id,))
+        
+        allocations = cur.fetchall()
+        
+        if not allocations:
+            conn.close()
+            return None
+        
+        # Build metadata
+        metadata = {
+            'plan_id': plan_id,
+            'total_students': session_row['total_students'],
+            'allocated_count': session_row['allocated_count']
+        }
+        
+        # Build seating matrix from allocations (basic structure)
+        seating = []
+        for row in allocations:
+            seating.append({
+                'position': row['seat_position'],
+                'roll_number': row['enrollment'],
+                'name': row['name'],
+                'batch_label': row['batch_name'],
+                'room_no': row['room_name']
+            })
+        
+        conn.close()
+        
+        return {
+            'seating': seating,
+            'metadata': metadata,
+            'source': 'database'
+        }
+    except Exception as e:
+        logger.error(f"❌ Database retrieval failed for session {session_id}: {e}")
+        return None
+
+
+def get_all_room_seating_from_cache(plan_id: str) -> Optional[Dict]:
+    """
+    Retrieve all rooms' seating data from cache for batch PDF generation.
+    
+    Args:
+        plan_id: Plan ID to lookup
+    
+    Returns:
+        Dict mapping room_no to seating data, or None
+    """
+    try:
+        snapshot = cache_manager.load_snapshot(plan_id)
+        if not snapshot or 'rooms' not in snapshot:
+            return None
+        
+        all_rooms = {}
+        for room_no, room_data in snapshot['rooms'].items():
+            all_rooms[room_no] = {
+                'seating': room_data.get('raw_matrix', []),
+                'metadata': {**snapshot.get('metadata', {}), 'room_no': room_no},
+                'batches': room_data.get('batches', {})
+            }
+        
+        logger.info(f"✅ Loaded {len(all_rooms)} rooms from cache for plan {plan_id}")
+        return all_rooms
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to get all rooms from cache: {e}")
+        return None
+
+# ============================================================================
 # LOGGING SETUP
 # ============================================================================
 logging.basicConfig(
@@ -1714,7 +1870,10 @@ def finalize_allocation_session(session_id):
     """
     Finalize session when complete.
     
-    CRITICAL FIX: Properly marks session as 'completed' so it no longer shows as active.
+    CRITICAL FIXES:
+    - Properly marks session as 'completed' so it no longer shows as active
+    - Extracts all rooms with allocated students
+    - Calls cache_manager.finalize_rooms() to prune experimental rooms from cache.json
     
     Returns:
         Success message or error
@@ -1763,7 +1922,22 @@ def finalize_allocation_session(session_id):
                 "allocated_count": allocated_count
             }), 400
         
-        # CRITICAL FIX: Update status to 'completed' AND set completed_at
+        # CRITICAL FIX: Extract all rooms with allocated students
+        cur.execute("""
+            SELECT DISTINCT c.name
+            FROM allocations a
+            LEFT JOIN classrooms c ON a.classroom_id = c.id
+            WHERE a.session_id = ?
+            AND c.name IS NOT NULL
+            ORDER BY c.name
+        """, (session_id,))
+        
+        allocated_room_rows = cur.fetchall()
+        finalized_room_list = [row['name'] for row in allocated_room_rows] if allocated_room_rows else []
+        
+        logger.info(f"📋 Finalized rooms for session {session_id}: {finalized_room_list}")
+        
+        # Update status to 'completed' AND set completed_at
         now = datetime.now().isoformat()
         
         cur.execute("""
@@ -1777,6 +1951,15 @@ def finalize_allocation_session(session_id):
         conn.commit()
         conn.close()
         
+        # CRITICAL FIX: Prune cache to remove experimental/unused rooms
+        if finalized_room_list and plan_id:
+            try:
+                cache_manager.finalize_rooms(plan_id, finalized_room_list)
+                logger.info(f"✅ Cache pruned for plan {plan_id}: kept rooms {finalized_room_list}")
+            except Exception as cache_error:
+                logger.warning(f"⚠️ Cache pruning failed for plan {plan_id}: {cache_error}")
+                # Don't fail the finalize if cache pruning fails - non-critical operation
+        
         logger.info(f"🏁 ✅ Session {session_id} finalized successfully (plan_id: {plan_id})")
         
         return jsonify({
@@ -1785,7 +1968,8 @@ def finalize_allocation_session(session_id):
             "session_id": session_id,
             "plan_id": plan_id,
             "total_students": total_students,
-            "allocated_count": allocated_count
+            "allocated_count": allocated_count,
+            "finalized_rooms": finalized_room_list
         })
         
     except Exception as e:
@@ -2792,64 +2976,109 @@ def manual_generate_seating():
 def generate_pdf():
     """
     Generate PDF from seating arrangement.
+    
+    HYBRID CACHING ARCHITECTURE:
+    =============================
+    Two-layer caching:
+    
+    Layer 1 (app.py - THIS LEVEL):
+    - Cache seating data retrieval
+    - Avoid repeated algorithm execution
+    - Priority: Cache > Database
+    
+    Layer 2 (pdf_generation.py - PDF LEVEL):
+    - Cache PDF file generation
+    - Uses content hash to avoid duplicate PDFs
+    - Handles all PDF rendering caching
+    
+    This endpoint ONLY manages seating data caching.
+    PDF file caching is handled transparently by get_or_create_seating_pdf().
     """
     try:
         data = request.get_json()
         if not data:
             return jsonify({"error": "No data provided"}), 400
         
-        snapshot_id = data.get('snapshot_id')
         seating_payload = None
+        seating_source = "unknown"  # Track WHERE seating came from
         
-        # Load from snapshot or use provided data
-        if snapshot_id:
-            logger.info(f"🔍 Loading snapshot: {snapshot_id}")
-            snapshot = cache_manager.load_snapshot(snapshot_id)
+        # ============================================================================
+        # LAYER 1: Get Seating Data - Check cache FIRST (avoid algorithm re-run)
+        # ============================================================================
+        plan_id = data.get('plan_id') or data.get('snapshot_id')
+        room_no = data.get('room_no')
+        
+        if plan_id:
+            logger.info(f"🔍 [L1-CACHE] Checking cache for plan: {plan_id}" + (f", room: {room_no}" if room_no else ""))
+            cached_seating = get_seating_from_cache(plan_id, room_no)
             
-            # ✅ FIXED: Check if snapshot does NOT exist
-            if not snapshot:
-                logger.warning(f"❌ Snapshot not found: {snapshot_id}")
-                return jsonify({"error": "Snapshot not found"}), 404
-            
-            # ✅ Use snapshot data
-            seating_payload = {
-                'seating': snapshot.get('raw_matrix'),
-                'metadata': snapshot.get('metadata', {}),
-                'batches': snapshot.get('batches', {})
-            }
-            logger.info(f"✅ Snapshot loaded: {snapshot_id}")
-            
-        else:
-            # Use data from request
-            if 'seating' not in data:
-                return jsonify({"error": "Invalid seating data"}), 400
-            seating_payload = data
-            logger.info("📄 Generating PDF from request data")
+            if cached_seating and cached_seating.get('seating'):
+                seating_payload = {
+                    'seating': cached_seating['seating'],
+                    'metadata': cached_seating['metadata'],
+                    'batches': cached_seating.get('batches', {})
+                }
+                seating_source = "cache"
+                logger.info(f"⚡ [L1-CACHE HIT] Seating loaded from cache (room: {cached_seating.get('room_no', 'N/A')})")
+        
+        # Fallback: Try session_id
+        if not seating_payload:
+            session_id = data.get('session_id')
+            if session_id:
+                logger.info(f"🔍 [L1-DB] Retrieving seating for session: {session_id}")
+                db_seating = get_seating_from_database(session_id)
+                
+                if db_seating and db_seating.get('seating'):
+                    seating_payload = db_seating
+                    seating_source = db_seating.get('source', 'database')
+                    
+                    if seating_source == 'cache':
+                        logger.info(f"⚡ [L1-CACHE HIT via Session] Seating from cache")
+                    else:
+                        logger.info(f"📊 [L1-DB] Seating built from database (slower)")
+        
+        # Fallback: Use provided seating data
+        if not seating_payload:
+            if 'seating' in data:
+                seating_payload = data
+                seating_source = "request"
+                logger.info("📄 [L1-REQUEST] Using seating from request")
+            else:
+                return jsonify({
+                    "error": "No seating data available",
+                    "hint": "Provide plan_id, session_id, or seating data"
+                }), 400
 
-        # Validate seating payload
+        # Validate
         if not seating_payload or not seating_payload.get('seating'):
             return jsonify({"error": "No seating data available"}), 400
 
-        user_id = 'test_user'
-        template_name = request.args.get('template_name', 'default')
+        user_id = data.get('user_id', 'test_user')
+        template_name = data.get('template_name', 'default')
         
+        # ============================================================================
+        # LAYER 2: PDF Generation - Let pdf_generation.py handle caching
+        # ============================================================================
+        logger.info(f"📋 [L1→L2] Passing to PDF generation: seating_source={seating_source}, user={user_id}, template={template_name}")
         
-        # Generate PDF
         try:
+            # This function handles PDF caching internally via content hash
+            # If same seating + template → reuses PDF file (very fast)
+            # If different seating or template → generates new PDF
             pdf_path = get_or_create_seating_pdf(
                 seating_payload,
                 user_id=user_id,
                 template_name=template_name
             )
         except Exception as pdf_err:
-            logger.error(f"PDF generation failed: {str(pdf_err)}")
+            logger.error(f"❌ PDF generation failed: {str(pdf_err)}")
             return jsonify({"error": f"PDF generation failed: {str(pdf_err)}"}), 500
         
         # Verify PDF exists
         if not os.path.exists(pdf_path):
             return jsonify({"error": "PDF file not created"}), 500
         
-        logger.info(f"✅ PDF generated: {pdf_path}")
+        logger.info(f"✅ PDF ready: {pdf_path} (seating_source={seating_source})")
         
         return send_file(
             pdf_path,
@@ -2860,6 +3089,114 @@ def generate_pdf():
         
     except Exception as e:
         logger.error(f"❌ PDF generation error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/generate-pdf/batch', methods=['POST'])
+def generate_pdf_batch():
+    """
+    Generate PDFs for all rooms in a plan (BATCH MODE).
+    
+    TWO-LAYER CACHING:
+    Layer 1: Get all seating data from cache (very fast - O(1))
+    Layer 2: Let pdf_generation.py cache PDF files (by content hash)
+    
+    Request:
+        {
+            "plan_id": "PLAN-XXXXX",
+            "user_id": "test_user",
+            "template_name": "default"
+        }
+    
+    Response:
+        {
+            "success": true,
+            "plan_id": "PLAN-XXXXX",
+            "rooms": {
+                "M101": {"status": "success", "path": "...pdf"},
+                "M102": {"status": "success", "path": "...pdf"}
+            }
+        }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        plan_id = data.get('plan_id')
+        if not plan_id:
+            return jsonify({"error": "plan_id required"}), 400
+        
+        user_id = data.get('user_id', 'test_user')
+        template_name = data.get('template_name', 'default')
+        
+        logger.info(f"📦 [BATCH L1] Starting batch PDF for plan: {plan_id}")
+        
+        # LAYER 1: Get all seating from cache (avoid re-running algorithm for each room)
+        all_rooms = get_all_room_seating_from_cache(plan_id)
+        
+        if not all_rooms:
+            logger.warning(f"❌ No rooms found in cache for plan {plan_id}")
+            return jsonify({
+                "error": "Plan not found or no rooms cached",
+                "plan_id": plan_id
+            }), 404
+        
+        logger.info(f"⚡ [BATCH L1] Loaded {len(all_rooms)} rooms from cache")
+        
+        results = {}
+        successful_count = 0
+        
+        # LAYER 2: For each room, pass to pdf_generation.py (handles PDF caching)
+        for room_no, room_seating in all_rooms.items():
+            try:
+                logger.info(f"  📄 [BATCH L2] Processing room: {room_no}")
+                
+                # pdf_generation.py will:
+                # - Check if PDF already exists (by hash)
+                # - Reuse if exists, generate if not
+                pdf_path = get_or_create_seating_pdf(
+                    room_seating,
+                    user_id=user_id,
+                    template_name=template_name
+                )
+                
+                if os.path.exists(pdf_path):
+                    results[room_no] = {
+                        'status': 'success',
+                        'path': pdf_path,
+                        'students': room_seating.get('metadata', {}).get('total_students', 0)
+                    }
+                    successful_count += 1
+                    logger.info(f"  ✅ [BATCH L2] PDF ready for {room_no}")
+                else:
+                    results[room_no] = {
+                        'status': 'error',
+                        'reason': 'PDF file not created'
+                    }
+                    logger.warning(f"  ⚠️ PDF file missing for {room_no}")
+                    
+            except Exception as room_err:
+                results[room_no] = {
+                    'status': 'error',
+                    'reason': str(room_err)
+                }
+                logger.error(f"  ❌ Failed to generate PDF for {room_no}: {room_err}")
+        
+        logger.info(f"📦 [BATCH COMPLETE] Generated {successful_count}/{len(all_rooms)} PDFs")
+        
+        return jsonify({
+            'success': successful_count > 0,
+            'plan_id': plan_id,
+            'total_rooms': len(all_rooms),
+            'successful': successful_count,
+            'rooms': results
+        }), 200 if successful_count > 0 else 206  # 206 = Partial Content
+        
+    except Exception as e:
+        logger.error(f"❌ Batch PDF generation error: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
@@ -3899,16 +4236,54 @@ def health_check():
 
 @app.route("/api/debug/cache", methods=["GET"])
 def debug_cache():
-    """Debug endpoint to view upload cache (dev only)."""
-    if os.getenv('FLASK_ENV') != 'development':
-        return jsonify({"error": "Only available in development"}), 403
-    
-    cache = app.config.get('UPLOAD_CACHE', {})
-    
-    return jsonify({
-        "cache_size": len(cache),
-        "batch_ids": list(cache.keys())
-    })
+    """
+    Debug endpoint to view cache statistics and hybrid caching status.
+    Shows current cache utilization and which plans have cached seating data.
+    """
+    try:
+        cache_snapshots = cache_manager.list_snapshots()
+        
+        # Calculate cache stats
+        total_students_cached = sum(s.get('total_students', 0) for s in cache_snapshots)
+        total_rooms = sum(len(s.get('rooms', [])) for s in cache_snapshots)
+        
+        # Get cache directory size
+        cache_dir = CACHE_DIR = os.path.join(os.path.dirname(__file__), 'cache')
+        cache_size_mb = 0
+        if os.path.exists(cache_dir):
+            for file in os.listdir(cache_dir):
+                filepath = os.path.join(cache_dir, file)
+                if os.path.isfile(filepath):
+                    cache_size_mb += os.path.getsize(filepath) / (1024 * 1024)
+        
+        return jsonify({
+            "success": True,
+            "hybrid_caching": {
+                "strategy": "cache_first",
+                "fallback": "database",
+                "cache_dir": cache_dir,
+                "cache_size_mb": round(cache_size_mb, 2)
+            },
+            "statistics": {
+                "total_plans_cached": len(cache_snapshots),
+                "total_students_allocated": total_students_cached,
+                "total_rooms_cached": total_rooms,
+                "avg_students_per_plan": round(total_students_cached / len(cache_snapshots), 1) if cache_snapshots else 0
+            },
+            "cached_plans": [
+                {
+                    "plan_id": s.get('plan_id'),
+                    "rooms": s.get('rooms', []),
+                    "total_students": s.get('total_students', 0),
+                    "last_updated": s.get('last_updated'),
+                    "status": s.get('status', 'active')
+                }
+                for s in cache_snapshots[:10]  # Show last 10
+            ]
+        }), 200
+    except Exception as e:
+        logger.error(f"Cache debug error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 # ============================================================================
 # DATABASE MANAGER ENDPOINTS
