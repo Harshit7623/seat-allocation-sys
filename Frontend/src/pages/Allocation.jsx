@@ -396,7 +396,17 @@ const AllocationPage = ({ showToast }) => {
       return;
     }
     
-    if (!window.confirm("✅ Finalize this session?\n\nThis will mark the session as complete.")) return;
+    // Extract allocated rooms reliably - use multiple fallback keys
+    const allocatedRoomList = 
+      session?.allocated_rooms?.map((r) => r.classroom_name) ||
+      allocatedRooms?.map((r) => r.classroom_name) ||
+      [];
+    
+    if (allocatedRoomList.length === 0) {
+      if (showToast) showToast("Warning: No rooms detected, but proceeding with finalize", "warning");
+    }
+    
+    if (!window.confirm("✅ Finalize this session?\n\nThis will mark the session as complete and clean up the cache.")) return;
 
     setLoading(true);
     try {
