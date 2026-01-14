@@ -1,3 +1,5 @@
+# Old file: needs to be removed
+# Legacy cache manager implementation. Replaced by algo/core/cache/cache_manager.py.
 import os
 import json
 import re

@@ -155,18 +155,18 @@ const signup = async (userData) => {
       };
     }
 
-    // ✅ NEW: Auto-login on successful signup
-    if (data.success && data.data && data.data.token) {
+    // ✅ Auto-login on successful signup
+    if (data.token && data.user) {
       // Store token and user data
-      localStorage.setItem('token', data.data.token);
-      localStorage.setItem('user', JSON.stringify(data.data.user));
-      setUser(data.data.user);
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      setUser(data.user);
 
       console.log('✅ Signup successful - User auto-logged in');
       return { 
         success: true, 
         message: data.message || 'Signup successful. You are now logged in!',
-        user: data.data.user 
+        user: data.user 
       };
     }
 

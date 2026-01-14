@@ -31,6 +31,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union, Optional
 
+# Old file: needs to be removed
+# Legacy student data parser. Replaced by algo/utils/parser.py.
 import pandas as pd
 
 logger = logging.getLogger("student_parser")

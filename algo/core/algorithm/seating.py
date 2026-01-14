@@ -1,32 +1,14 @@
-# algo.py
-import json
+# Core seating allocation algorithm.
+# Implements the logic for placing students in rows/columns with batch constraints and paper set alternation.
 import math
+import re
 from typing import List, Dict, Tuple, Optional
-from dataclasses import dataclass
-from enum import Enum
+from collections import deque
+import logging
 
+from algo.core.models.allocation import Seat, PaperSet
 
-class PaperSet(Enum):
-    A = "A"
-    B = "B"
-
-
-@dataclass
-class Seat:
-    row: int
-    col: int
-    batch: Optional[int] = None
-    paper_set: Optional[PaperSet] = None
-    block: Optional[int] = None
-    # roll_number may be an integer or a formatted string (e.g. BTCS24O1134 or enrollment)
-    roll_number: Optional[str] = None
-    # Name of the student 
-    student_name: Optional[str] = None 
-    # is_broken: True if this seat is broken/unavailable
-    is_broken: bool = False
-    # color: color code for display (e.g., "#FF0000" for red, "#F3F4F6" for light gray)
-    color: str = "#FFFFFF"
-
+logger = logging.getLogger(__name__)
 
 class SeatingAlgorithm:
     # Default batch colors (can be customized)
@@ -135,8 +117,6 @@ class SeatingAlgorithm:
                 continue
             s = s.strip()
             # find trailing digits (serial)
-            import re
-
             m = re.search(r"(\d+)$", s)
             if m:
                 serial_digits = m.group(1)
@@ -182,6 +162,7 @@ class SeatingAlgorithm:
                 if self.batch_student_counts and b in self.batch_student_counts:
                     batch_limits[b] = self.batch_student_counts[b]
                 elif self.batch_roll_numbers and b in self.batch_roll_numbers:
+                    # Only map if the key exists to avoid KeyError
                     batch_limits[b] = len(self.batch_roll_numbers[b])
                 else:
                     batch_limits[b] = batch_sizes[b - 1]
@@ -190,8 +171,6 @@ class SeatingAlgorithm:
             batch_allocated = {b: 0 for b in range(1, self.num_batches + 1)}
 
             # Build roll queues
-            from collections import deque
-
             batch_queues: Dict[int, deque] = {}
             next_roll = self.start_serial
 

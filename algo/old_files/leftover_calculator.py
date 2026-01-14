@@ -1,3 +1,5 @@
+# Old file: needs to be removed
+# Legacy utility for calculating unallocated students.
 """
 SeatAlloc v2.0 - Leftover Calculator
 Calculates unallocated students after seating plan generation
