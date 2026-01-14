@@ -1,5 +1,9 @@
-# seat-allocation-sys
-check out the documentation in the `algo/Details/` folder for in-depth information about the seat allocation system, including architecture, algorithm logic, and visual diagrams to assist with understanding and implementation.
+# Seat Allocation System
+
+Comprehensive documentation can be found in the following root-level files:
+- [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md): System structure, data flow, and architecture guides.
+- [TECHNICAL_DEVELOPER_GUIDE.md](TECHNICAL_DEVELOPER_GUIDE.md): API references, service usage, and developer quick start.
+- [ALGORITHM_SPECIFICATION.md](ALGORITHM_SPECIFICATION.md): Core seating logic and constraint priority specifications.
 
 
 ---
