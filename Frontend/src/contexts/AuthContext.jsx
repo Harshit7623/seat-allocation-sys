@@ -2,8 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext();
 
-// API base URL
-const API_BASE_URL = '';
+// API base URL - Use environment variable if provided, otherwise default to relative path
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || '';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);

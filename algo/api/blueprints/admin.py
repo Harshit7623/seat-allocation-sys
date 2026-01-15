@@ -135,19 +135,43 @@ def get_table_data(table_name):
         if sort_by not in col_names:
             sort_by = col_names[0] if col_names else 'id'
             
-        # Build query
+        # Build query with Data Isolation
+        user_id = request.user_id
         searchable = TABLE_CONFIG.get(table_name, {}).get('searchable', col_names[:3])
-        base_query = f"SELECT * FROM {table_name}"
-        count_query = f"SELECT COUNT(*) FROM {table_name}"
-        params = []
         
+        # User isolation logic
+        where_clauses = []
+        params = []
+
+        if table_name == 'allocation_sessions':
+            where_clauses.append("user_id = ?")
+            params.append(user_id)
+        elif table_name == 'uploads':
+            where_clauses.append("session_id IN (SELECT session_id FROM allocation_sessions WHERE user_id = ?)")
+            params.append(user_id)
+        elif table_name == 'students':
+            where_clauses.append("upload_id IN (SELECT u.id FROM uploads u JOIN allocation_sessions s ON u.session_id = s.session_id WHERE s.user_id = ?)")
+            params.append(user_id)
+        elif table_name == 'allocations':
+            where_clauses.append("session_id IN (SELECT session_id FROM allocation_sessions WHERE user_id = ?)")
+            params.append(user_id)
+        elif table_name == 'feedback':
+            where_clauses.append("user_id = ?")
+            params.append(user_id)
+        elif table_name == 'user_activity':
+            where_clauses.append("user_id = ?")
+            params.append(user_id)
+        # classrooms is global
+
         if search and searchable:
-            conditions = [f"{c} LIKE ?" for c in searchable if c in col_names]
-            if conditions:
-                where = " OR ".join(conditions)
-                base_query += f" WHERE ({where})"
-                count_query += f" WHERE ({where})"
-                params = [f"%{search}%" for _ in conditions]
+            search_conditions = [f"{c} LIKE ?" for c in searchable if c in col_names]
+            if search_conditions:
+                where_clauses.append(f"({' OR '.join(search_conditions)})")
+                params.extend([f"%{search}%" for _ in search_conditions])
+
+        where_stmt = f" WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+        base_query = f"SELECT * FROM {table_name}{where_stmt}"
+        count_query = f"SELECT COUNT(*) FROM {table_name}{where_stmt}"
         
         # Get total
         cur.execute(count_query, params)
@@ -188,6 +212,35 @@ def modify_record(table_name, record_id):
     cur = conn.cursor()
     
     try:
+        # Ownership check
+        user_id = request.user_id
+        ownership_query = ""
+        ownership_params = [record_id]
+
+        if table_name == 'allocation_sessions':
+            ownership_query = f"SELECT 1 FROM {table_name} WHERE session_id = ? AND user_id = ?"
+            ownership_params.append(user_id)
+        elif table_name == 'uploads':
+            ownership_query = f"SELECT 1 FROM {table_name} WHERE id = ? AND session_id IN (SELECT session_id FROM allocation_sessions WHERE user_id = ?)"
+            ownership_params.append(user_id)
+        elif table_name == 'students':
+            ownership_query = f"SELECT 1 FROM {table_name} WHERE id = ? AND upload_id IN (SELECT u.id FROM uploads u JOIN allocation_sessions s ON u.session_id = s.session_id WHERE s.user_id = ?)"
+            ownership_params.append(user_id)
+        elif table_name == 'allocations':
+            ownership_query = f"SELECT 1 FROM {table_name} WHERE id = ? AND session_id IN (SELECT session_id FROM allocation_sessions WHERE user_id = ?)"
+            ownership_params.append(user_id)
+        elif table_name == 'feedback' or table_name == 'user_activity':
+            ownership_query = f"SELECT 1 FROM {table_name} WHERE id = ? AND user_id = ?"
+            ownership_params.append(user_id)
+        elif table_name == 'classrooms':
+            ownership_query = f"SELECT 1 FROM {table_name} WHERE id = ?"
+        
+        if ownership_query:
+            cur.execute(ownership_query, ownership_params)
+            if not cur.fetchone():
+                conn.close()
+                return jsonify({"success": False, "error": "Access denied or record not found"}), 403
+
         if request.method == 'PUT':
             data = request.get_json()
             editable = TABLE_CONFIG.get(table_name, {}).get('editable', [])
@@ -197,21 +250,17 @@ def modify_record(table_name, record_id):
                 return jsonify({"success": False, "error": "No editable fields"}), 400
             
             set_clause = ", ".join([f"{k} = ?" for k in update_data])
-            cur.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", list(update_data.values()) + [record_id])
-            
-            if cur.rowcount == 0:
-                conn.close()
-                return jsonify({"success": False, "error": "Not found"}), 404
+            # Use session_id for allocation_sessions table
+            pk_col = 'session_id' if table_name == 'allocation_sessions' else 'id'
+            cur.execute(f"UPDATE {table_name} SET {set_clause} WHERE {pk_col} = ?", list(update_data.values()) + [record_id])
             
             conn.commit()
             conn.close()
             return jsonify({"success": True, "message": "Updated"})
             
         elif request.method == 'DELETE':
-            cur.execute(f"DELETE FROM {table_name} WHERE id = ?", (record_id,))
-            if cur.rowcount == 0:
-                conn.close()
-                return jsonify({"success": False, "error": "Not found"}), 404
+            pk_col = 'session_id' if table_name == 'allocation_sessions' else 'id'
+            cur.execute(f"DELETE FROM {table_name} WHERE {pk_col} = ?", (record_id,))
             
             conn.commit()
             conn.close()
@@ -232,11 +281,40 @@ def bulk_delete(table_name):
         if not ids:
             return jsonify({"success": False, "error": "No IDs provided"}), 400
             
+        user_id = request.user_id
         conn = get_db_connection()
         cur = conn.cursor()
         
+        # Ownership check for each ID
         placeholders = ','.join(['?'] * len(ids))
-        cur.execute(f"DELETE FROM {table_name} WHERE id IN ({placeholders})", ids)
+        ownership_query = ""
+        ownership_params = ids + [user_id]
+
+        if table_name == 'allocation_sessions':
+            ownership_query = f"SELECT session_id FROM {table_name} WHERE session_id IN ({placeholders}) AND user_id = ?"
+        elif table_name == 'uploads':
+            ownership_query = f"SELECT id FROM {table_name} WHERE id IN ({placeholders}) AND session_id IN (SELECT session_id FROM allocation_sessions WHERE user_id = ?)"
+        elif table_name == 'students':
+            ownership_query = f"SELECT id FROM {table_name} WHERE id IN ({placeholders}) AND upload_id IN (SELECT u.id FROM uploads u JOIN allocation_sessions s ON u.session_id = s.session_id WHERE s.user_id = ?)"
+        elif table_name == 'allocations':
+            ownership_query = f"SELECT id FROM {table_name} WHERE id IN ({placeholders}) AND session_id IN (SELECT session_id FROM allocation_sessions WHERE user_id = ?)"
+        elif table_name == 'feedback' or table_name == 'user_activity':
+            ownership_query = f"SELECT id FROM {table_name} WHERE id IN ({placeholders}) AND user_id = ?"
+        elif table_name == 'classrooms':
+             ownership_query = f"SELECT id FROM {table_name} WHERE id IN ({placeholders})"
+             ownership_params = ids
+
+        if ownership_query:
+            cur.execute(ownership_query, ownership_params)
+            valid_ids = [row[0] for row in cur.fetchall()]
+            if not valid_ids:
+                conn.close()
+                return jsonify({"success": False, "error": "Access denied or records not found"}), 403
+            
+            # Delete only valid IDs
+            placeholders = ','.join(['?'] * len(valid_ids))
+            pk_col = 'session_id' if table_name == 'allocation_sessions' else 'id'
+            cur.execute(f"DELETE FROM {table_name} WHERE {pk_col} IN ({placeholders})", valid_ids)
         
         conn.commit()
         conn.close()
@@ -255,11 +333,33 @@ def export_table(table_name):
         import io
         from flask import make_response
         
+        user_id = request.user_id
         conn = get_db_connection()
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         
-        cur.execute(f"SELECT * FROM {table_name}")
+        # User isolation logic (reusing get_table_data logic)
+        where_clauses = []
+        params = []
+
+        if table_name == 'allocation_sessions':
+            where_clauses.append("user_id = ?")
+            params.append(user_id)
+        elif table_name == 'uploads':
+            where_clauses.append("session_id IN (SELECT session_id FROM allocation_sessions WHERE user_id = ?)")
+            params.append(user_id)
+        elif table_name == 'students':
+            where_clauses.append("upload_id IN (SELECT u.id FROM uploads u JOIN allocation_sessions s ON u.session_id = s.session_id WHERE s.user_id = ?)")
+            params.append(user_id)
+        elif table_name == 'allocations':
+            where_clauses.append("session_id IN (SELECT session_id FROM allocation_sessions WHERE user_id = ?)")
+            params.append(user_id)
+        elif table_name == 'feedback' or table_name == 'user_activity':
+            where_clauses.append("user_id = ?")
+            params.append(user_id)
+
+        where_stmt = f" WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+        cur.execute(f"SELECT * FROM {table_name}{where_stmt}", params)
         rows = cur.fetchall()
         
         if not rows:
@@ -289,17 +389,30 @@ def export_table(table_name):
 @token_required
 def reset_data():
     try:
+        user_id = request.user_id
         conn = get_db_connection()
         cur = conn.cursor()
         # Order matters for FK
         tables = ['allocations', 'students', 'uploads', 'allocation_sessions', 'allocation_history', 'feedback']
+        
         for t in tables:
-            cur.execute(f"DELETE FROM {t}")
-            cur.execute(f"DELETE FROM sqlite_sequence WHERE name='{t}'")
+            # User isolation deletion
+            if t == 'allocation_sessions':
+                cur.execute(f"DELETE FROM {t} WHERE user_id = ?", (user_id,))
+            elif t == 'uploads':
+                cur.execute(f"DELETE FROM {t} WHERE session_id IN (SELECT session_id FROM allocation_sessions WHERE user_id = ?)", (user_id,))
+            elif t == 'students':
+                cur.execute(f"DELETE FROM {t} WHERE upload_id IN (SELECT u.id FROM uploads u JOIN allocation_sessions s ON u.session_id = s.session_id WHERE s.user_id = ?)", (user_id,))
+            elif t == 'allocations':
+                cur.execute(f"DELETE FROM {t} WHERE session_id IN (SELECT session_id FROM allocation_sessions WHERE user_id = ?)", (user_id,))
+            elif t == 'allocation_history':
+                cur.execute(f"DELETE FROM {t} WHERE session_id IN (SELECT session_id FROM allocation_sessions WHERE user_id = ?)", (user_id,))
+            elif t == 'feedback':
+                cur.execute(f"DELETE FROM {t} WHERE user_id = ?", (user_id,))
             
         conn.commit()
         conn.close()
-        return jsonify({"status": "success", "message": "All data cleared"})
+        return jsonify({"status": "success", "message": "User data cleared"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -307,12 +420,29 @@ def reset_data():
 @token_required
 def db_overview():
     try:
+        user_id = request.user_id
         conn = get_db_connection()
         cur = conn.cursor()
         tables = ['students', 'classrooms', 'uploads', 'allocations', 'feedback']
         counts = {}
         for t in tables:
-            cur.execute(f"SELECT COUNT(*) FROM {t}")
+            where_stmt = ""
+            params = []
+            if t == 'uploads':
+                where_stmt = " WHERE session_id IN (SELECT session_id FROM allocation_sessions WHERE user_id = ?)"
+                params.append(user_id)
+            elif t == 'students':
+                where_stmt = " WHERE upload_id IN (SELECT u.id FROM uploads u JOIN allocation_sessions s ON u.session_id = s.session_id WHERE s.user_id = ?)"
+                params.append(user_id)
+            elif t == 'allocations':
+                where_stmt = " WHERE session_id IN (SELECT session_id FROM allocation_sessions WHERE user_id = ?)"
+                params.append(user_id)
+            elif t == 'feedback':
+                where_stmt = " WHERE user_id = ?"
+                params.append(user_id)
+            # classrooms is global
+            
+            cur.execute(f"SELECT COUNT(*) FROM {t}{where_stmt}", params)
             counts[t] = cur.fetchone()[0]
         conn.close()
         return jsonify({"success": True, "overview": {"tables": counts}})
@@ -328,16 +458,18 @@ def get_db_hierarchy():
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         
-        # Main hierarchy query
+        # Main hierarchy query with Data Isolation
+        user_id = request.user_id
         cur.execute("""
             SELECT s.session_id, s.plan_id, s.total_students, s.allocated_count, s.status, s.created_at,
                    u.batch_name, u.batch_color, u.batch_id, u.id as upload_id, COUNT(st.id) as batch_student_count
             FROM allocation_sessions s
             LEFT JOIN uploads u ON s.session_id = u.session_id
             LEFT JOIN students st ON u.id = st.upload_id
+            WHERE s.user_id = ?
             GROUP BY s.session_id, u.batch_id
             ORDER BY s.created_at DESC, u.batch_name
-        """)
+        """, (user_id,))
         rows = cur.fetchall()
         
         hierarchy = {}

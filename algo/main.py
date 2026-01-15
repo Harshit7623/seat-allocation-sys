@@ -16,6 +16,7 @@ from algo.api.blueprints.classrooms import classrooms_bp
 from algo.api.blueprints.dashboard import dashboard_bp
 from algo.api.blueprints.admin import auth_bp, admin_bp
 from algo.api.blueprints.health import health_bp
+from algo.api.blueprints.feedback import feedback_bp
 
 def create_app(test_config=None):
     # Setup Logging
@@ -63,6 +64,7 @@ def create_app(test_config=None):
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(feedback_bp)
     
     from algo.api.blueprints.plans import plans_bp
     app.register_blueprint(plans_bp)

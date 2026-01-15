@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 def get_db():
     """Get database connection for the current request"""
     if 'db' not in g:
-        g.db = sqlite3.connect(Config.DB_PATH)
+        g.db = sqlite3.connect(Config.DB_PATH, timeout=20)
         g.db.row_factory = sqlite3.Row
     return g.db
 
@@ -22,7 +22,7 @@ def close_db(e=None):
 
 def get_db_connection_standalone():
     """Get a standalone database connection (for scripts/outside context)"""
-    conn = sqlite3.connect(Config.DB_PATH)
+    conn = sqlite3.connect(Config.DB_PATH, timeout=20)
     conn.row_factory = sqlite3.Row
     return conn
 
