@@ -1,9 +1,14 @@
 # Administrative and authentication endpoints.
 # Handles user login/signup and provides utilities for bulk database table operations.
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, jsonify, request, send_file, current_app
 from algo.database.db import get_db_connection
 from algo.auth_service import token_required, login as auth_login, signup as auth_signup, google_auth_handler, get_user_by_token, get_user_by_id
 import sqlite3
+
+# Helper for optional rate limiting
+def get_limiter():
+    """Get rate limiter from app if available"""
+    return getattr(current_app, 'limiter', None)
 
 # Combined Auth and Admin for simplicity as per legacy app structure usually mostly admin
 # But creating separate Blueprints is cleaner
@@ -15,6 +20,11 @@ admin_bp = Blueprint('admin', __name__, url_prefix='/api')
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
+    # Apply rate limit if available (5 per minute on login)
+    limiter = get_limiter()
+    if limiter:
+        limiter.limit("5 per minute")(lambda: None)()
+    
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSession } from '../contexts/SessionContext';
 import SessionIndicator from '../components/SessionIndicator';
+import PageTransition from '../components/PageTransition';
 import { 
   Upload, Loader2, AlertCircle, CheckCircle, FileSpreadsheet, 
   Database, ArrowRight, Eye, Check, X, Zap, RefreshCw, FileText
@@ -304,6 +305,7 @@ const UploadPage = ({ showToast }) => {
   }
 
   return (
+    <PageTransition>
     <div className="min-h-screen bg-gray-50 dark:bg-[#050505] py-8 px-4 transition-colors duration-300">
       <div className="max-w-5xl mx-auto space-y-8">
         
@@ -720,17 +722,8 @@ const UploadPage = ({ showToast }) => {
           </AnimatePresence>
         </div>
       </div>
-
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
-      `}</style>
     </div>
+    </PageTransition>
   );
 };
 

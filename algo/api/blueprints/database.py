@@ -5,7 +5,7 @@ Provides alternative paths for session operations used by Database Manager UI.
 """
 
 from flask import Blueprint, jsonify, request
-from api.blueprints.sessions import deleteSession, getActiveSession, _get_conn
+from algo.api.blueprints.sessions import deleteSession, getActiveSession, _get_conn
 import sqlite3
 
 database_bp = Blueprint('database', __name__, url_prefix='/api/database')

@@ -16,7 +16,29 @@ from algo.utils.helpers import parse_str_dict, parse_int_dict
 
 logger = logging.getLogger(__name__)
 
+
 class AllocationService:
+    """
+    Seating allocation orchestration service.
+    
+    Handles all allocation-related business logic including:
+    - Algorithm execution and configuration
+    - Constraint validation
+    - Allocation storage and retrieval
+    - Cache management for generated plans
+    
+    Usage:
+        from algo.services import AllocationService
+        
+        # Generate allocation for a classroom
+        result = AllocationService.allocate_classroom(
+            session_id=5,
+            classroom={'id': 3, 'name': 'Room 101', 'rows': 6, 'cols': 8},
+            student_distribution={1: 20, 2: 15},
+            student_roll_numbers={1: ['BTCS24O1001', ...], 2: [...]}
+        )
+    """
+
     @staticmethod
     def allocate_classroom(
         session_id: int, 
@@ -261,3 +283,244 @@ class AllocationService:
         session = SessionQueries.get_session_by_id(session_id)
         if session:
              CacheManager().delete_snapshot(session['plan_id'])
+
+    @staticmethod
+    def undo_last_allocation(session_id: int) -> Dict[str, Any]:
+        """
+        Undo the last room allocation for a session.
+        
+        Finds the most recent classroom allocation (via history or fallback to last modified),
+        removes all allocations for that classroom, and updates session counts.
+        
+        Returns:
+            Dict with success, message, classroom_name, students_restored
+        """
+        from algo.database.db import get_db
+        db = get_db()
+        
+        try:
+            # Try to find last allocation from history
+            history_id = None
+            target_classroom = None
+            affected = 0
+            
+            try:
+                cursor = db.execute("""
+                    SELECT id, classroom_id, students_affected
+                    FROM allocation_history
+                    WHERE session_id = ? AND action_type = 'allocate'
+                    ORDER BY step_number DESC LIMIT 1
+                """, (session_id,))
+                last_step = cursor.fetchone()
+                
+                if last_step:
+                    history_id = last_step['id']
+                    target_classroom = last_step['classroom_id']
+                    affected = last_step['students_affected']
+            except Exception:
+                pass  # Table might not exist
+            
+            # Fallback: find last classroom with allocations
+            if not target_classroom:
+                cursor = db.execute("""
+                    SELECT classroom_id, COUNT(*) as cnt
+                    FROM allocations WHERE session_id = ?
+                    GROUP BY classroom_id ORDER BY MAX(id) DESC LIMIT 1
+                """, (session_id,))
+                fallback = cursor.fetchone()
+                
+                if not fallback:
+                    return {"success": False, "message": "Nothing to undo"}
+                
+                target_classroom = fallback['classroom_id']
+                affected = fallback['cnt']
+            
+            # Get classroom name for message
+            cursor = db.execute("SELECT name FROM classrooms WHERE id = ?", (target_classroom,))
+            classroom_row = cursor.fetchone()
+            classroom_name = classroom_row['name'] if classroom_row else f"Room {target_classroom}"
+            
+            # Delete allocations for that classroom
+            cursor = db.execute("""
+                DELETE FROM allocations WHERE session_id = ? AND classroom_id = ?
+            """, (session_id, target_classroom))
+            deleted = cursor.rowcount
+            
+            # Update session count
+            db.execute("""
+                UPDATE allocation_sessions
+                SET allocated_count = MAX(0, allocated_count - ?), last_activity = CURRENT_TIMESTAMP
+                WHERE session_id = ?
+            """, (deleted, session_id))
+            
+            # Remove history record if exists
+            if history_id:
+                try:
+                    db.execute("DELETE FROM allocation_history WHERE id = ?", (history_id,))
+                except:
+                    pass
+            
+            db.commit()
+            
+            logger.info(f"Undid allocation for {classroom_name} ({deleted} students)")
+            
+            return {
+                "success": True,
+                "message": f"Undid allocation for {classroom_name} ({deleted} students)",
+                "classroom_name": classroom_name,
+                "students_restored": deleted
+            }
+            
+        except Exception as e:
+            logger.error(f"Error undoing allocation for session {session_id}: {e}")
+            return {"success": False, "error": str(e)}
+
+    @staticmethod
+    def save_room_allocation(
+        session_id: int,
+        classroom_id: int,
+        seating_data: Dict,
+        selected_batch_names: List[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Save allocation for one room from seating matrix data.
+        
+        Args:
+            session_id: Session ID
+            classroom_id: Classroom ID  
+            seating_data: Dict with 'seating' key containing 2D matrix
+            selected_batch_names: Optional list of batch names to filter
+            
+        Returns:
+            Dict with allocation result including updated session stats
+        """
+        from algo.database.db import get_db
+        db = get_db()
+        
+        try:
+            # Validate session
+            cursor = db.execute("""
+                SELECT session_id, plan_id, status, total_students, allocated_count
+                FROM allocation_sessions WHERE session_id = ?
+            """, (session_id,))
+            session_row = cursor.fetchone()
+            
+            if not session_row:
+                return {"success": False, "error": "Session not found"}
+            
+            if session_row['status'] != 'active':
+                return {"success": False, "error": f"Session is {session_row['status']}, not active"}
+            
+            # Get classroom info
+            cursor = db.execute("SELECT id, name, rows, cols FROM classrooms WHERE id = ?", (classroom_id,))
+            classroom = cursor.fetchone()
+            if not classroom:
+                return {"success": False, "error": "Classroom not found"}
+            
+            # Process seating matrix
+            seating_matrix = seating_data.get('seating', [])
+            allocated_students = []
+            
+            for row_idx, row in enumerate(seating_matrix):
+                if not isinstance(row, list):
+                    continue
+                for col_idx, seat in enumerate(row):
+                    if not seat or seat.get('is_broken') or seat.get('is_unallocated'):
+                        continue
+                    
+                    enrollment = seat.get('roll_number')
+                    if not enrollment:
+                        continue
+                    
+                    # Find student
+                    cursor = db.execute("""
+                        SELECT s.id, s.batch_name
+                        FROM students s
+                        JOIN uploads u ON s.upload_id = u.id
+                        WHERE s.enrollment = ?
+                        AND u.session_id = ?
+                        AND s.id NOT IN (SELECT student_id FROM allocations WHERE session_id = ?)
+                    """, (enrollment, session_id, session_id))
+                    
+                    student_row = cursor.fetchone()
+                    
+                    if student_row:
+                        # Filter by batch if specified
+                        if selected_batch_names and student_row['batch_name'] not in selected_batch_names:
+                            continue
+                        
+                        # Insert allocation
+                        db.execute("""
+                            INSERT INTO allocations
+                            (session_id, classroom_id, student_id, enrollment, seat_position, batch_name, paper_set)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            session_id, 
+                            classroom_id, 
+                            student_row['id'], 
+                            enrollment,
+                            f"{row_idx + 1}-{col_idx + 1}", 
+                            student_row['batch_name'], 
+                            seat.get('paper_set', 'A')
+                        ))
+                        
+                        allocated_students.append(enrollment)
+            
+            # Update session totals
+            db.execute("""
+                UPDATE allocation_sessions
+                SET allocated_count = allocated_count + ?, last_activity = CURRENT_TIMESTAMP
+                WHERE session_id = ?
+            """, (len(allocated_students), session_id))
+            
+            # Add to history (if table exists)
+            try:
+                cursor = db.execute("SELECT COALESCE(MAX(step_number), 0) + 1 FROM allocation_history WHERE session_id = ?", (session_id,))
+                step_num = cursor.fetchone()[0]
+                
+                db.execute("""
+                    INSERT INTO allocation_history (session_id, step_number, classroom_id, action_type, students_affected, created_at)
+                    VALUES (?, ?, ?, 'allocate', ?, CURRENT_TIMESTAMP)
+                """, (session_id, step_num, classroom_id, len(allocated_students)))
+            except Exception:
+                pass  # allocation_history table might not exist
+            
+            db.commit()
+            
+            # Get fresh totals
+            cursor = db.execute("""
+                SELECT total_students, allocated_count, plan_id 
+                FROM allocation_sessions WHERE session_id = ?
+            """, (session_id,))
+            fresh = cursor.fetchone()
+            
+            # Get all allocated rooms
+            allocated_rooms = AllocationQueries.get_allocated_rooms(session_id)
+            
+            fresh_total = fresh['total_students'] or 0
+            fresh_allocated = fresh['allocated_count'] or 0
+            fresh_pending = max(0, fresh_total - fresh_allocated)
+            
+            logger.info(f"Allocated {len(allocated_students)} students to {classroom['name']}")
+            
+            return {
+                "success": True,
+                "message": f"Allocated {len(allocated_students)} students to {classroom['name']}",
+                "allocated_count": len(allocated_students),
+                "remaining_count": fresh_pending,
+                "session": {
+                    "session_id": session_id,
+                    "plan_id": fresh['plan_id'],
+                    "total_students": fresh_total,
+                    "allocated_count": fresh_allocated,
+                    "pending_count": fresh_pending,
+                    "allocated_rooms": allocated_rooms
+                },
+                "can_finalize": fresh_pending == 0
+            }
+            
+        except Exception as e:
+            logger.error(f"Error saving room allocation: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}

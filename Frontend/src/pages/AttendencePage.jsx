@@ -315,11 +315,11 @@ const buildCompleteMetadata = () => {
             </div>
           </div>
           <button 
-            onClick={() => navigate('/create-plan')}
+            onClick={() => navigate('/allocation')}
             className="text-sm font-bold text-gray-500 hover:text-orange-500 transition-colors flex items-center gap-2"
           >
             <ArrowLeft size={16} />
-            Back to Plans
+            Back to Allocation
           </button>
         </div>
 

@@ -4,6 +4,7 @@ import StyledButton from '../components/Template/StyledButton.jsx';
 import StyledInput from '../components/Template/StyledInput.jsx'; 
 import { useTheme } from '../contexts/ThemeContext.jsx';
 import { useSession } from '../contexts/SessionContext.jsx';
+import PageTransition from '../components/PageTransition.jsx';
 
 import { 
     Save, 
@@ -255,6 +256,7 @@ function TemplateEditor({ showToast }) {
     }
 
     return (
+    <PageTransition>
         <div className="min-h-screen bg-gray-50 dark:bg-[#050505] py-8 px-4 transition-colors duration-300">
             <div className="max-w-6xl mx-auto space-y-8">
                 
@@ -561,6 +563,7 @@ function TemplateEditor({ showToast }) {
                 </div>
             </div>
         </div>
+    </PageTransition>
     );
 }
 
