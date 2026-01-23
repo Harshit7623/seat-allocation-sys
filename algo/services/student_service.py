@@ -10,7 +10,35 @@ from algo.config.settings import Config
 
 logger = logging.getLogger(__name__)
 
+
 class StudentService:
+    """
+    Student data management service.
+    
+    Handles all student-related business logic including:
+    - File upload processing (Excel/CSV)
+    - Student data validation and parsing
+    - Batch information extraction
+    - Session-bound student queries
+    
+    Usage:
+        from algo.services import StudentService
+        
+        # Process an uploaded file
+        result = StudentService.process_student_upload(
+            session_id=5,
+            file_obj=uploaded_file,
+            batch_name="CSE-2024",
+            batch_color="#3b82f6"
+        )
+        
+        # Get students for a session
+        students = StudentService.get_session_students(session_id=5)
+        
+        # Get batch summary
+        batches = StudentService.get_batch_summary(session_id=5)
+    """
+
     @staticmethod
     def process_student_upload(session_id: int, file_obj, batch_name: str, batch_color: str) -> Dict:
         """

@@ -1,12 +1,20 @@
 import os
+import logging
 from pathlib import Path
 
 # Base directory
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
+# Production environment check
+_IS_PRODUCTION = os.getenv('FLASK_ENV') == 'production'
+
 class Config:
     # Security
     SECRET_KEY = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-prod')
+    
+    # Warn if using default secret in production
+    if _IS_PRODUCTION and SECRET_KEY == 'dev-secret-key-change-in-prod':
+        logging.warning("⚠️  CRITICAL: Using default SECRET_KEY in production! Set FLASK_SECRET_KEY.")
     
     # Database
     DB_NAME = "demo.db"

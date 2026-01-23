@@ -84,10 +84,17 @@ export const AuthProvider = ({ children }) => {
         body: JSON.stringify({ token: googleToken }),
       });
 
+      // Check if response is JSON (not HTML error page)
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Server returned non-JSON response. Is Flask running?');
+        return { success: false, error: 'Server unavailable. Please ensure the backend is running.' };
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
-        return { success: false, error: data.error || 'Google login failed' };
+        return { success: false, error: data.message || data.error || 'Google login failed' };
       }
 
       // Store token and user data in localStorage
@@ -98,7 +105,8 @@ export const AuthProvider = ({ children }) => {
       console.log('✅ Google login successful');
       return { success: true, user: data.user };
     } catch (error) {
-      return { success: false, error: error.message || 'Google login failed' };
+      console.error('Google login error:', error);
+      return { success: false, error: 'Server unavailable. Please ensure the backend is running.' };
     }
   };
 
@@ -115,10 +123,17 @@ export const AuthProvider = ({ children }) => {
         body: JSON.stringify({ email, password }),
       });
 
+      // Check if response is JSON (not HTML error page)
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Server returned non-JSON response. Is Flask running?');
+        return { success: false, error: 'Server unavailable. Please ensure the backend is running.' };
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
-        return { success: false, error: data.error || 'Login failed' };
+        return { success: false, error: data.message || data.error || 'Login failed' };
       }
 
       // Store token and user data in localStorage
@@ -129,7 +144,8 @@ export const AuthProvider = ({ children }) => {
       console.log('✅ Email login successful');
       return { success: true };
     } catch (error) {
-      return { success: false, error: error.message || 'Login failed' };
+      console.error('Login error:', error);
+      return { success: false, error: 'Server unavailable. Please ensure the backend is running.' };
     }
   };
 
@@ -146,12 +162,19 @@ const signup = async (userData) => {
       body: JSON.stringify(userData),
     });
 
+    // Check if response is JSON (not HTML error page)
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      console.error('Server returned non-JSON response. Is Flask running?');
+      return { success: false, error: 'Server unavailable. Please ensure the backend is running.' };
+    }
+
     const data = await response.json();
 
     if (!response.ok) {
       return { 
         success: false, 
-        error: data.error || data.message || 'Signup failed' 
+        error: data.message || data.error || 'Signup failed' 
       };
     }
 
@@ -175,9 +198,10 @@ const signup = async (userData) => {
       error: 'Signup response incomplete' 
     };
   } catch (error) {
+    console.error('Signup error:', error);
     return { 
       success: false, 
-      error: error.message || 'Signup failed' 
+      error: 'Server unavailable. Please ensure the backend is running.' 
     };
   }
 };
@@ -222,15 +246,23 @@ const signup = async (userData) => {
         },
       });
 
+      // Check if response is JSON (not HTML error page)
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Server returned non-JSON response. Is Flask running?');
+        return { success: false, error: 'Server unavailable' };
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
-        return { success: false, error: data.error || 'Failed to fetch profile' };
+        return { success: false, error: data.message || data.error || 'Failed to fetch profile' };
       }
 
       return { success: true, user: data.user };
     } catch (error) {
-      return { success: false, error: error.message || 'Failed to fetch profile' };
+      console.error('Profile fetch error:', error);
+      return { success: false, error: 'Server unavailable' };
     }
   };
 
@@ -253,10 +285,17 @@ const signup = async (userData) => {
         body: JSON.stringify({ username, email }),
       });
 
+      // Check if response is JSON (not HTML error page)
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Server returned non-JSON response. Is Flask running?');
+        return { success: false, error: 'Server unavailable' };
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
-        return { success: false, error: data.error || 'Failed to update profile' };
+        return { success: false, error: data.message || data.error || 'Failed to update profile' };
       }
 
       // Update localStorage with new user data
@@ -267,7 +306,8 @@ const signup = async (userData) => {
 
       return { success: true, message: data.message };
     } catch (error) {
-      return { success: false, error: error.message || 'Failed to update profile' };
+      console.error('Profile update error:', error);
+      return { success: false, error: 'Server unavailable' };
     }
   };
 

@@ -7,13 +7,22 @@ const GoogleLoginComponent = ({ showToast }) => {
   const navigate = useNavigate();
   const { googleLogin } = useAuth();
   const [loading, setLoading] = React.useState(false);
+  const [googleAvailable, setGoogleAvailable] = React.useState(true);
 
   useEffect(() => {
+    // Check if Google Client ID is configured
+    const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+    if (!clientId || clientId === 'your_client_id' || clientId.length < 20) {
+      console.warn('⚠️ Google Client ID not configured. Hiding Google Sign-In button.');
+      setGoogleAvailable(false);
+      return;
+    }
+
     // Initialize Google Sign-In when component mounts
     if (window.google) {
       try {
         window.google.accounts.id.initialize({
-          client_id: process.env.REACT_APP_GOOGLE_CLIENT_ID,
+          client_id: clientId,
           callback: handleCredentialResponse,
           ux_mode: 'popup',
           auto_select: false,
@@ -24,7 +33,7 @@ const GoogleLoginComponent = ({ showToast }) => {
 
         // Log configuration for debugging (redacted sensitive parts)
         console.log('🛠️ GSI Configured:', {
-          clientId: process.env.REACT_APP_GOOGLE_CLIENT_ID?.substring(0, 20) + '...',
+          clientId: clientId?.substring(0, 20) + '...',
           origin: window.location.origin,
           apiBase: process.env.REACT_APP_API_BASE_URL || '/'
         });
@@ -43,13 +52,14 @@ const GoogleLoginComponent = ({ showToast }) => {
         console.log('✅ Google Sign-In button rendered');
       } catch (error) {
         console.error('❌ Google initialization error:', error);
-        showToast('Google Sign-In initialization failed. Check Console for details.', 'error');
+        // Hide Google button on error instead of showing toast
+        setGoogleAvailable(false);
       }
     } else {
-      console.warn('⚠️ Google API not loaded. Check if script tag is in public/index.html');
-      showToast('Google Sign-In library not loaded', 'error');
+      console.warn('⚠️ Google API not loaded');
+      setGoogleAvailable(false);
     }
-  }, [showToast]);
+  }, []);  // Remove showToast dependency to prevent re-renders
 
   const handleCredentialResponse = async (response) => {
     try {
@@ -89,30 +99,34 @@ const GoogleLoginComponent = ({ showToast }) => {
 
   return (
     <div className="w-full">
-      {/* Google Sign-In Button Container */}
-      <div
-        id="google-signin-button"
-        className="w-full flex justify-center min-h-12"
-      >
-        {loading && (
-          <div className="flex items-center gap-2 text-gray-600">
-            <Loader2 className="animate-spin" size={20} />
-            <span>Signing in with Google...</span>
+      {/* Google Sign-In Button Container - only show if Google is available */}
+      {googleAvailable && (
+        <>
+          <div
+            id="google-signin-button"
+            className="w-full flex justify-center min-h-12"
+          >
+            {loading && (
+              <div className="flex items-center gap-2 text-gray-600">
+                <Loader2 className="animate-spin" size={20} />
+                <span>Signing in with Google...</span>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* OR Divider (Optional) */}
-      <div className="relative my-6">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
-        </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="px-3 bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 font-medium">
-            Or continue with email
-          </span>
-        </div>
-      </div>
+          {/* OR Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-3 bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 font-medium">
+                Or continue with email
+              </span>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

@@ -33,6 +33,10 @@ JWT_ALGORITHM = "HS256"
 TOKEN_EXPIRATION_DAYS = 7
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 
+# Production safety check
+if os.getenv('FLASK_ENV') == 'production' and JWT_SECRET_KEY == "dev-stable-secret-key-change-in-prod":
+    print("⚠️  CRITICAL: Using default JWT_SECRET_KEY in production! Set JWT_SECRET_KEY env variable.")
+
 # ============================================================================
 # ADMIN EMAIL LIST (Add admin emails here)
 # ============================================================================
@@ -68,6 +72,20 @@ def token_required(f):
         except Exception as e:
             return jsonify({'message': f'Error verifying token: {str(e)}'}), 401
             
+        return f(*args, **kwargs)
+    
+    return decorated
+
+def admin_required(f):
+    """Decorator to require ADMIN role. Must be used AFTER @token_required."""
+    from functools import wraps
+    from flask import request, jsonify
+    
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user_role = getattr(request, 'user_role', None)
+        if user_role != 'ADMIN':
+            return jsonify({'status': 'error', 'message': 'Admin access required'}), 403
         return f(*args, **kwargs)
     
     return decorated

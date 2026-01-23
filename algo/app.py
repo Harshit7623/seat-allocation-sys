@@ -13,11 +13,14 @@ if __name__ == "__main__":
     print("=" * 70)
     print("🚀 Starting Seat Allocation System - Modular Backend")
     print("=" * 70)
-    print(f"🔧 Environment: {os.getenv('FLASK_ENV', 'production')}")
+    flask_env = os.getenv('FLASK_ENV', 'production')
+    is_debug = flask_env != 'production'
+    print(f"🔧 Environment: {flask_env}")
+    print(f"🐛 Debug Mode: {is_debug}")
     print("=" * 70)
     
     app.run(
-        debug=True,
+        debug=is_debug,
         port=5000,
         host='0.0.0.0'
     )

@@ -6,7 +6,7 @@ import {
   Users, Layout, MapPin, Download, Play, Monitor, 
   Loader2, AlertCircle, RefreshCw, CheckCircle2,
   Trash2, Flame, UserCheck, Undo2, BarChart3,
-  ArrowRight, AlertTriangle, Info, X, ShieldCheck, XCircle
+  ArrowRight, AlertTriangle, Info, X, ShieldCheck, XCircle, LogOut
 } from 'lucide-react';
 
 const Card = ({ className, children, ref }) => <div ref={ref} className={`glass-card ${className}`}>{children}</div>;
@@ -522,23 +522,27 @@ const AllocationPage = ({ showToast }) => {
   };
 
   // ============================================================================
-  // RESET DATABASE
+  // END SESSION (Expire current session only)
   // ============================================================================
-  const handleResetDatabase = async () => {
-    if (!window.confirm("⚠️ DANGER: Delete ALL student data?")) return;
-    if (!window.confirm("⚠️ FINAL WARNING: Cannot be undone!")) return;
+  const handleEndSession = async () => {
+    if (!session?.session_id) {
+      if (showToast) showToast("No active session to end", "error");
+      return;
+    }
+    if (!window.confirm("End this session? You can start a new one after.")) return;
 
     setResetting(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch("/api/reset-data", {
+      const res = await fetch(`/api/sessions/${session.session_id}/expire`, {
         method: "POST",
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
-      if (!res.ok) throw new Error("Reset failed");
+      if (!res.ok) throw new Error("Failed to end session");
       setSession(null);
+      setHasActiveSession(false);
       setWebData(null);
-      if (showToast) showToast("Database cleared", "success");
+      if (showToast) showToast("Session ended successfully", "success");
       navigate('/upload', { replace: true });
     } catch (e) {
       if (showToast) showToast(e.message, "error");
@@ -680,7 +684,7 @@ if (initializing) {
               </ol>
 
               <button
-                onClick={() => navigate('/create-plan', { replace: true })}
+                onClick={() => navigate('/upload', { replace: true })}
                 className="w-full mt-4 h-12 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg"
               >
                 Go to Upload
@@ -979,9 +983,9 @@ if (initializing) {
               </div>
 
               <div className="pt-4 border-t-2 border-gray-200 dark:border-gray-800">
-                <Button onClick={handleResetDatabase} variant="destructive" className="w-full h-11 text-sm font-bold uppercase tracking-wide" disabled={resetting}>
-                  {resetting ? <Loader2 className="animate-spin mr-2" size={16}/> : <Trash2 size={16} className="mr-2"/>}
-                  {resetting ? 'Resetting...' : 'Reset All Data'}
+                <Button onClick={handleEndSession} variant="destructive" className="w-full h-11 text-sm font-bold uppercase tracking-wide" disabled={resetting}>
+                  {resetting ? <Loader2 className="animate-spin mr-2" size={16}/> : <LogOut size={16} className="mr-2"/>}
+                  {resetting ? 'Ending...' : 'End Session'}
                 </Button>
               </div>
 

@@ -1,10 +1,10 @@
 // frontend/src/App.jsx
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SessionProvider, useSession } from './contexts/SessionContext';
-
 
 // --- Components ---
 import Navbar from './components/Navbar';
@@ -31,18 +31,51 @@ import { DatabaseManager } from './components/database';
 import ManualAllocation from './pages/ManualAllocation';
 
 // -------------------------------------------------------------------
-// PROTECTED ROUTE COMPONENT
+// PAGE TRANSITION CONFIG (Single source of truth)
+// -------------------------------------------------------------------
+const pageTransitionVariants = {
+  initial: { opacity: 0, y: 8 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -8 },
+};
+
+const pageTransitionConfig = {
+  duration: 0.2,
+  ease: [0.25, 0.1, 0.25, 1],
+};
+
+// -------------------------------------------------------------------
+// ANIMATED LAYOUT (The key component - animates Outlet)
+// -------------------------------------------------------------------
+const AnimatedLayout = ({ showToast }) => {
+  const location = useLocation();
+  
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={location.pathname}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        variants={pageTransitionVariants}
+        transition={pageTransitionConfig}
+      >
+        <Outlet context={{ showToast }} />
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
+// -------------------------------------------------------------------
+// PROTECTED ROUTE (Clean, no nesting issues)
 // -------------------------------------------------------------------
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-gray-400 font-medium">Loading your session…</p>
-        </div>
+      <div className="min-h-screen bg-gray-50 dark:bg-[#050505] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-gray-200 dark:border-gray-700 border-t-orange-500 rounded-full animate-spin" />
       </div>
     );
   }
@@ -51,34 +84,46 @@ const ProtectedRoute = ({ children }) => {
 };
 
 // -------------------------------------------------------------------
-// SESSION RECOVERY HANDLER (FIXED)
+// SESSION RECOVERY HANDLER
 // -------------------------------------------------------------------
 const SessionRecoveryHandler = () => {
   const sessionCtx = useSession();
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
 
-  // CRITICAL FIX: Safe access to recoverableSessions
   const sessions = React.useMemo(() => {
     return Array.isArray(sessionCtx?.recoverableSessions) ? sessionCtx.recoverableSessions : [];
   }, [sessionCtx?.recoverableSessions]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (sessions.length > 0) {
       setShowRecoveryModal(true);
     }
   }, [sessions]);
 
   if (!showRecoveryModal || sessions.length === 0) return null;
-
   return <SessionRecoveryModal onClose={() => setShowRecoveryModal(false)} />;
 };
 
 // -------------------------------------------------------------------
-// APP CONTENT
+// ROOT LAYOUT (Navbar + Animated Content + Footer)
 // -------------------------------------------------------------------
-const AppContent = () => {
-  const { loading: authLoading } = useAuth();
-  const sessionCtx = useSession();
+const RootLayout = ({ showToast }) => {
+  return (
+    <div className="min-h-screen flex flex-col bg-white dark:bg-[#050505] transition-colors duration-200">
+      <SessionRecoveryHandler />
+      <Navbar />
+      <main className="flex-1">
+        <AnimatedLayout showToast={showToast} />
+      </main>
+      <Footer />
+    </div>
+  );
+};
+
+// -------------------------------------------------------------------
+// APP ROUTES (Clean, no wrapper on each route)
+// -------------------------------------------------------------------
+const AppRoutes = () => {
   const [toast, setToast] = useState(null);
 
   const showToast = (message, type = 'info') => {
@@ -86,40 +131,22 @@ const AppContent = () => {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const closeToast = () => setToast(null);
-
-  // Show loading if either Auth or Session is loading
-  if (authLoading || sessionCtx?.loading) {
-    return (
-      <div className="min-h-screen bg-white dark:bg-phantom-black flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-orange-500 border-t-transparent mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-gray-400 font-medium">Initializing System...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen flex flex-col transition-colors duration-300 bg-white dark:bg-phantom-black">
-      {/* Global Session Recovery UI */}
-      <SessionRecoveryHandler />
-
-      <Navbar />
-
-      <main className="flex-1">
-        <Routes>
+    <>
+      <Routes>
+        {/* Root Layout wraps all routes - handles animation once */}
+        <Route element={<RootLayout showToast={showToast} />}>
+          
+          {/* Public Routes */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/aboutus" element={<AboutusPage showToast={showToast} />} />
           <Route path="/login" element={<LoginPage showToast={showToast} />} />
           <Route path="/signup" element={<SignupPage showToast={showToast} />} />
 
+          {/* Protected Routes - Clean syntax */}
           <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage showToast={showToast} /></ProtectedRoute>} />
-          <Route 
-            path="/manual-allocation" 
-            element={<ProtectedRoute><ManualAllocation showToast={showToast} /></ProtectedRoute>} 
-          />
+          <Route path="/manual-allocation" element={<ProtectedRoute><ManualAllocation showToast={showToast} /></ProtectedRoute>} />
           <Route path="/upload" element={<ProtectedRoute><UploadPage showToast={showToast} /></ProtectedRoute>} />
           <Route path="/allocation" element={<ProtectedRoute><Allocation showToast={showToast} /></ProtectedRoute>} />
           <Route path="/create-plan" element={<ProtectedRoute><CreatePlan /></ProtectedRoute>} />
@@ -129,21 +156,40 @@ const AppContent = () => {
           <Route path="/attendance/:planId" element={<ProtectedRoute><AttendancePage showToast={showToast} /></ProtectedRoute>} />
           <Route path="/database" element={<ProtectedRoute><DatabaseManager showToast={showToast} /></ProtectedRoute>} />
 
+          {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
+        </Route>
+      </Routes>
 
-      <Footer />
-
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={closeToast}
-        />
-      )}
-    </div>
+      {/* Toast - Outside routes */}
+      <AnimatePresence>
+        {toast && (
+          <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+        )}
+      </AnimatePresence>
+    </>
   );
+};
+
+// -------------------------------------------------------------------
+// APP CONTENT (Handles loading states)
+// -------------------------------------------------------------------
+const AppContent = () => {
+  const { loading: authLoading } = useAuth();
+  const sessionCtx = useSession();
+
+  if (authLoading || sessionCtx?.loading) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-[#050505] flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="w-10 h-10 border-2 border-gray-200 dark:border-gray-700 border-t-orange-500 rounded-full animate-spin mx-auto" />
+          <p className="text-gray-500 dark:text-gray-400 text-sm">Initializing...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <AppRoutes />;
 };
 
 // -------------------------------------------------------------------

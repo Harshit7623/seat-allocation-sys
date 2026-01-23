@@ -64,3 +64,30 @@ class StudentQueries:
         db.execute("DELETE FROM uploads WHERE id = ?", (upload_id,))
         # Students cascade deleted
         db.commit()
+
+    @staticmethod
+    def get_session_uploads(session_id: int) -> List[Dict]:
+        """
+        Get all uploads/batches for a session with student counts.
+        
+        Returns:
+            List of upload dicts with upload_id, batch_id, batch_name, batch_color,
+            original_filename, uploaded_at, and student_count
+        """
+        db = get_db()
+        cursor = db.execute("""
+            SELECT 
+                u.id as upload_id,
+                u.batch_id,
+                u.batch_name,
+                u.batch_color,
+                u.original_filename,
+                u.created_at as uploaded_at,
+                COUNT(s.id) as student_count
+            FROM uploads u
+            LEFT JOIN students s ON u.id = s.upload_id
+            WHERE u.session_id = ?
+            GROUP BY u.id
+            ORDER BY u.created_at DESC
+        """, (session_id,))
+        return [dict(row) for row in cursor.fetchall()]
