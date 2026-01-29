@@ -263,6 +263,7 @@ const CreatePlan = ({ showToast }) => {
     if (roomName) {
       params.set('room', roomName);
     }
+    params.set('source', 'create-plan');
     
     const queryString = params.toString();
     const url = `/attendance/${plan.plan_id}${queryString ? `?${queryString}` : ''}`;

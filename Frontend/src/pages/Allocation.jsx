@@ -1094,7 +1094,7 @@ if (initializing) {
               {webData && (
                 <div className="flex gap-2 flex-wrap">
                   <Button 
-                        onClick={() => session?.plan_id && navigate(`/attendance/${session.plan_id}`)} 
+                        onClick={() => session?.plan_id && navigate(`/attendance/${session.plan_id}?source=allocation`)} 
                         disabled={!session?.plan_id}
                         className="h-10 px-4 bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 text-xs font-bold"
 >

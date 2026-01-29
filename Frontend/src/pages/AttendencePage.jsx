@@ -12,6 +12,8 @@ const AttendancePage = ({ showToast }) => {
   const navigate = useNavigate();
 
   const roomFromUrl = searchParams.get('room');
+  // Determine where user came from (default to allocation)
+  const source = searchParams.get('source') || 'allocation';
 
   const [batchGroups, setBatchGroups] = useState({});
   const [roomName, setRoomName] = useState(roomFromUrl || "");
@@ -98,7 +100,13 @@ const AttendancePage = ({ showToast }) => {
   };
 
   const switchRoom = (newRoom) => {
-    navigate(`/attendance/${planId}?room=${encodeURIComponent(newRoom)}`);
+    // Preserve the source parameter when switching rooms
+    const params = new URLSearchParams();
+    params.set('room', newRoom);
+    if (source !== 'allocation') {
+      params.set('source', source);
+    }
+    navigate(`/attendance/${planId}?${params.toString()}`);
   };
 
   // ✅ FIXED: Build complete metadata for API
@@ -315,11 +323,20 @@ const buildCompleteMetadata = () => {
             </div>
           </div>
           <button 
-            onClick={() => navigate('/allocation')}
+            onClick={() => {
+              if (source === 'plan-viewer') {
+                navigate(`/plan-viewer/${planId}`);
+              } else if (source === 'create-plan') {
+                navigate('/create-plan');
+              } else {
+                navigate('/allocation');
+              }
+            }}
             className="text-sm font-bold text-gray-500 hover:text-orange-500 transition-colors flex items-center gap-2"
           >
             <ArrowLeft size={16} />
-            Back to Allocation
+            {source === 'plan-viewer' ? 'Back to Plan Viewer' : 
+             source === 'create-plan' ? 'Back to Create Plan' : 'Back to Allocation'}
           </button>
         </div>
 
