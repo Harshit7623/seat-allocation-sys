@@ -13,7 +13,8 @@ import {
   MessageSquare,
   Info,
   FileEdit,
-  Plus
+  Plus,
+  Shield
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -34,13 +35,20 @@ const Navbar = () => {
 
   const navItems = useMemo(() => {
     if (!user) return [];
-    return [
+    const items = [
       { name: 'Dashboard', page: '/dashboard', icon: LayoutDashboard },
       { name: 'Create', page: '/create-plan', icon: Plus },
       { name: 'Template Editor', page: '/template-editor', icon: FileEdit },
       { name: 'Feedback', page: '/feedback', icon: MessageSquare },
       { name: 'About us', page: '/aboutus', icon: Info }
     ];
+    
+    // Add admin-only feedback link for administrators
+    if (user.role === 'ADMIN') {
+      items.push({ name: 'Admin Feedback', page: '/admin-feedback', icon: Shield });
+    }
+    
+    return items;
   }, [user]);
 
   const isActive = (page) => location.pathname === page;

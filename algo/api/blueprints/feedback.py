@@ -122,3 +122,46 @@ def get_user_feedback():
     except Exception as e:
         logger.error(f"Get feedback error: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+@feedback_bp.route("/api/feedback/admin/all", methods=["GET"])
+@token_required
+def get_all_feedback_admin():
+    """
+    Get all feedback submitted by all users (Admin only).
+    """
+    try:
+        user_role = getattr(request, 'user_role', None)
+        
+        if user_role != 'ADMIN':
+            return jsonify({"error": "Admin access required"}), 403
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT 
+                f.id, f.user_id, f.issue_type, f.priority, f.description,
+                f.feature_suggestion, f.additional_info, f.file_name,
+                f.status, f.created_at, f.resolved_at, f.admin_response,
+                u.username, u.email
+            FROM feedback f
+            LEFT JOIN users u ON f.user_id = u.id
+            ORDER BY f.created_at DESC
+        """)
+        
+        feedback_list = []
+        for row in cur.fetchall():
+            feedback_dict = dict(row)
+            feedback_list.append(feedback_dict)
+        
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "feedback": feedback_list,
+            "total": len(feedback_list)
+        })
+        
+    except Exception as e:
+        logger.error(f"Get all feedback error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
