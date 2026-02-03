@@ -23,6 +23,7 @@ import UploadPage from './pages/UploadPage';
 import Allocation from './pages/Allocation';
 import CreatePlan from './pages/CreatePlan';
 import FeedbackPage from './pages/FeedbackPage';
+import AdminFeedbackPage from './pages/AdminFeedbackPage';
 import AboutusPage from './pages/AboutusPage';
 import TemplateEditor from './pages/TemplateEditor';
 import AttendancePage from './pages/AttendencePage';
@@ -152,6 +153,7 @@ const AppRoutes = () => {
           <Route path="/create-plan" element={<ProtectedRoute><CreatePlan /></ProtectedRoute>} />
           <Route path="/classroom" element={<ProtectedRoute><ClassroomPage /></ProtectedRoute>} />
           <Route path="/feedback" element={<ProtectedRoute><FeedbackPage showToast={showToast} /></ProtectedRoute>} />
+          <Route path="/admin-feedback" element={<ProtectedRoute><AdminFeedbackPage showToast={showToast} /></ProtectedRoute>} />
           <Route path="/template-editor" element={<ProtectedRoute><TemplateEditor showToast={showToast} /></ProtectedRoute>} />
           <Route path="/attendance/:planId" element={<ProtectedRoute><AttendancePage showToast={showToast} /></ProtectedRoute>} />
           <Route path="/database" element={<ProtectedRoute><DatabaseManager showToast={showToast} /></ProtectedRoute>} />
