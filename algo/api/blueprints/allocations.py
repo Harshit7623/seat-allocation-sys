@@ -217,6 +217,7 @@ def generate_seating():
             'rows': int(data.get("rows", 10)),
             'cols': int(data.get("cols", 6)),
             'block_width': int(data.get("block_width", 2)),
+            'block_structure': data.get("block_structure"),  # Variable block widths
             'broken_seats': broken_seats
         }
 
@@ -252,6 +253,7 @@ def generate_seating():
             cols=int(data.get("cols", 6)),
             num_batches=num_batches,
             block_width=int(data.get("block_width", 2)),
+            block_structure=data.get("block_structure"),  # Variable block widths
             batch_by_column=bool(data.get("batch_by_column", True)),
             randomize_column=bool(data.get("randomize_column", False)),
             broken_seats=broken_seats,
@@ -400,6 +402,7 @@ def manual_generate_seating():
             cols=int(data.get("cols", 10)),
             num_batches=num_batches,
             block_width=int(data.get("block_width", 3)),
+            block_structure=data.get("block_structure"),  # Variable block widths
             batch_by_column=bool(data.get("batch_by_column", True)),
             randomize_column=bool(data.get("randomize_column", False)),
             broken_seats=broken_seats,
@@ -449,6 +452,7 @@ def constraints_status():
             cols=int(data.get("cols", 6)),
             num_batches=int(data.get("num_batches", 3)),
             block_width=int(data.get("block_width", 2)),
+            block_structure=data.get("block_structure"),  # Variable block widths
             batch_by_column=bool(data.get("batch_by_column", True)),
             randomize_column=bool(data.get("randomize_column", False))
         )

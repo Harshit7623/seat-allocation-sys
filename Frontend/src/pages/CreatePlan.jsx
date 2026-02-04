@@ -874,14 +874,7 @@ const CreatePlan = ({ showToast }) => {
           to { opacity: 1; }
         }
 
-        .glass-card {
-          background: rgba(255, 255, 255, 0.9);
-          backdrop-filter: blur(10px);
-        }
-
-        .dark .glass-card {
-          background: rgba(17, 24, 39, 0.9);
-        }
+        
       `}</style>
     </div>
   );

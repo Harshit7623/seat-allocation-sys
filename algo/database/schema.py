@@ -114,6 +114,7 @@ def ensure_demo_db():
                 cols INTEGER NOT NULL CHECK(cols > 0 AND cols <= 50),
                 broken_seats TEXT DEFAULT '',
                 block_width INTEGER DEFAULT 1 CHECK(block_width > 0),
+                block_structure TEXT DEFAULT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
@@ -202,7 +203,8 @@ def ensure_demo_db():
             ("ALTER TABLE allocation_sessions ADD COLUMN name TEXT", "sessions.name"),
             ("ALTER TABLE allocation_sessions ADD COLUMN last_activity DATETIME DEFAULT CURRENT_TIMESTAMP", "sessions.last_activity"),
             ("ALTER TABLE classrooms ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP", "classrooms.updated_at"),
-            ("ALTER TABLE classrooms ADD COLUMN block_width INTEGER DEFAULT 2", "classrooms.block_width")
+            ("ALTER TABLE classrooms ADD COLUMN block_width INTEGER DEFAULT 2", "classrooms.block_width"),
+            ("ALTER TABLE classrooms ADD COLUMN block_structure TEXT DEFAULT NULL", "classrooms.block_structure")
             
         ]
 

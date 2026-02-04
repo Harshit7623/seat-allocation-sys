@@ -26,6 +26,7 @@ class SeatingAlgorithm:
         cols: int,
         num_batches: int,
         block_width: int = 3,
+        block_structure: Optional[List[int]] = None,  # NEW: Variable block widths [3,2,3,1]
         batch_by_column: bool = True,
         randomize_column: bool = False,
         # roll formatting options
@@ -52,7 +53,9 @@ class SeatingAlgorithm:
     ):
         """
         rows, cols, num_batches: as before
-        block_width: number of columns per block (default 3 as requested)
+        block_width: number of columns per block (default 3 as requested) - used if block_structure is None
+        block_structure: list of variable block widths, e.g. [3,2,3] for 8 columns
+                        Takes precedence over block_width if provided.
         batch_by_column: if True, assign each column to a batch and fill that column
                          top->down using that batch's roll-number pool (matches your example)
         enforce_no_adjacent_batches: when True validate that adjacent seats don't share same batch
@@ -69,9 +72,21 @@ class SeatingAlgorithm:
         self.rows = rows
         self.cols = cols
         self.num_batches = num_batches
-        self.block_width = max(1, block_width)
-        # number of blocks across the columns
-        self.blocks = math.ceil(cols / self.block_width)
+        
+        # Handle block structure - variable widths take precedence
+        self.block_structure = block_structure
+        if self.block_structure:
+            # Validate and use variable block structure
+            self._build_block_map()
+            self.block_width = self.block_structure[0] if self.block_structure else block_width
+            self.blocks = len(self.block_structure)
+        else:
+            # Legacy: uniform block width
+            self.block_width = max(1, block_width)
+            self.blocks = math.ceil(cols / self.block_width)
+            # Build legacy block map
+            self._build_uniform_block_map()
+        
         self.batch_by_column = batch_by_column
         self.randomize_column = randomize_column
         # broken seats as a set for O(1) lookup
@@ -134,6 +149,62 @@ class SeatingAlgorithm:
                 # if user didn't set serial_width explicitly, infer from length
                 if (serial_width is None) or (serial_width == 0):
                     self.serial_width = max(self.serial_width, len(serial_digits))
+
+    def _build_block_map(self):
+        """
+        Build column-to-block mapping for variable block structure.
+        
+        Example: block_structure = [3, 2, 3] for 8 columns
+        - Columns 0, 1, 2 → Block 0
+        - Columns 3, 4 → Block 1
+        - Columns 5, 6, 7 → Block 2
+        """
+        self.col_to_block = {}
+        self.block_ranges = []  # [(start_col, end_col), ...]
+        
+        start = 0
+        for block_idx, width in enumerate(self.block_structure):
+            end = start + width - 1
+            self.block_ranges.append((start, end))
+            for c in range(start, start + width):
+                if c < self.cols:  # Safety check
+                    self.col_to_block[c] = block_idx
+            start += width
+        
+        logger.debug(f"Block structure: {self.block_structure}, Block ranges: {self.block_ranges}")
+    
+    def _build_uniform_block_map(self):
+        """
+        Build column-to-block mapping for uniform block width (legacy).
+        """
+        self.col_to_block = {}
+        self.block_ranges = []
+        
+        for c in range(self.cols):
+            block_idx = c // self.block_width
+            self.col_to_block[c] = block_idx
+        
+        # Build ranges
+        for block_idx in range(self.blocks):
+            start = block_idx * self.block_width
+            end = min(start + self.block_width - 1, self.cols - 1)
+            self.block_ranges.append((start, end))
+    
+    def _get_block_index(self, col: int) -> int:
+        """Get block index for a given column using the prebuilt mapping."""
+        return self.col_to_block.get(col, 0)
+    
+    def _is_same_block(self, col1: int, col2: int) -> bool:
+        """Check if two columns are in the same block."""
+        return self._get_block_index(col1) == self._get_block_index(col2)
+    
+    def _get_col_in_block(self, col: int) -> int:
+        """Get the position of a column within its block (0-indexed)."""
+        block_idx = self._get_block_index(col)
+        if block_idx < len(self.block_ranges):
+            block_start = self.block_ranges[block_idx][0]
+            return col - block_start
+        return col % self.block_width  # Fallback
 
     def generate_seating(self) -> List[List[Seat]]:
         """Generate seating arrangement with all constraints"""
@@ -243,7 +314,7 @@ class SeatingAlgorithm:
                 # BLOCK-AWARE GAP: If only one batch is assigned, skip odd columns WITHIN each block
                 # to prevent same-batch horizontal neighbors. Isolation is relaxed across block boundaries.
                 if self.num_batches == 1:
-                    col_in_block = col % self.block_width
+                    col_in_block = self._get_col_in_block(col)
                     if col_in_block % 2 != 0:
                         # This is a gap column within a block
                         for row in range(self.rows):
@@ -252,7 +323,7 @@ class SeatingAlgorithm:
                                 row=row, col=col, is_broken=is_broken, roll_number=None, 
                                 color="#FF0000" if is_broken else "#F3F4F6", # Red if broken
                                 paper_set=self._calculate_paper_set(row, col, b),
-                                block=col // self.block_width
+                                block=self._get_block_index(col)
                             )
                         continue
 
@@ -324,7 +395,7 @@ class SeatingAlgorithm:
                             col=col,
                             batch=b,
                             paper_set=self._calculate_paper_set(row, col, b),
-                            block=col // self.block_width,
+                            block=self._get_block_index(col),
                             roll_number=student['roll'],
                             student_name=student['name'],
                             color=self.batch_colors.get(b, "#E5E7EB"),
@@ -337,7 +408,7 @@ class SeatingAlgorithm:
                             col=col,
                             batch=b,
                             paper_set=self._calculate_paper_set(row, col, b),
-                            block=col // self.block_width,
+                            block=self._get_block_index(col),
                             roll_number=None,
                             color="#F3F4F6",
                         )
@@ -360,7 +431,7 @@ class SeatingAlgorithm:
                     paper_set = self._calculate_paper_set(row, col, batch)
 
                     # Calculate block
-                    block = col // self.block_width
+                    block = self._get_block_index(col)
 
                     # Get batch color
                     batch_color = self.batch_colors.get(batch, "#E5E7EB")
@@ -523,7 +594,7 @@ class SeatingAlgorithm:
                     not right.is_broken and right.roll_number):
                     # Only flag if both students are in the same batch AND same block
                     if seat.batch == right.batch:
-                        if (c // self.block_width) == ((c + 1) // self.block_width):
+                        if self._is_same_block(c, c + 1):
                             label = self.batch_labels.get(seat.batch, seat.batch)
                             errors.append(f"Same batch {label} sitting horizontally at row {r}, cols {c}-{c+1} (Same Block)")
 
@@ -561,10 +632,15 @@ class SeatingAlgorithm:
         )
 
         # 3. Block width constraint
+        block_desc = (
+            f"Variable blocks: {self.block_structure}" 
+            if self.block_structure 
+            else f"Uniform: {self.blocks} blocks of {self.block_width} columns each"
+        )
         constraints.append(
             {
-                "name": "Block Width Enforcement",
-                "description": f"Arranges {self.blocks} blocks of {self.block_width} columns each",
+                "name": "Block Structure",
+                "description": block_desc,
                 "applied": True,
                 "satisfied": self._verify_blocks_correct(),
             }
@@ -668,8 +744,13 @@ class SeatingAlgorithm:
 
     def _verify_blocks_correct(self) -> bool:
         """Verify block structure is correct"""
-        calculated = math.ceil(self.cols / self.block_width)
-        return calculated == self.blocks
+        if self.block_structure:
+            # Variable blocks - verify sum equals cols
+            return sum(self.block_structure) == self.cols and len(self.block_structure) == self.blocks
+        else:
+            # Uniform blocks
+            calculated = math.ceil(self.cols / self.block_width)
+            return calculated == self.blocks
 
     def _verify_paper_sets_alternate(self) -> bool:
         """Verify paper sets alternate for physically adjacent students of the same batch"""
@@ -734,6 +815,7 @@ class SeatingAlgorithm:
                 "num_batches": self.num_batches,
                 "blocks": self.blocks,
                 "block_width": self.block_width,
+                "block_structure": self.block_structure,  # Variable block widths
             },
             "seating": [],
             "summary": self._generate_summary(),

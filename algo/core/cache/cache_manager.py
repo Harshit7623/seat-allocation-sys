@@ -97,6 +97,7 @@ class CacheManager:
                 "rows": input_config.get('rows'),
                 "cols": input_config.get('cols'),
                 "block_width": input_config.get('block_width'),
+                "block_structure": input_config.get('block_structure'),  # Variable block widths
                 "broken_seats": input_config.get('broken_seats')
             }
         }

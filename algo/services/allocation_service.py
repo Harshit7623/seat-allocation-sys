@@ -137,13 +137,18 @@ class AllocationService:
                  algo_input_rolls[idx] = student_roll_numbers[batch_key]
                  
              idx += 1
+        
+        # Get block_structure from classroom (auto-converted on read)
+        block_structure = classroom.get('block_structure')
+        block_width = int(classroom.get('block_width', 2))
              
         # 3. Instantiate Algorithm
         algo = SeatingAlgorithm(
             rows=rows,
             cols=cols,
             num_batches=num_batches,
-            block_width=int(classroom.get('block_width', 2)),
+            block_width=block_width,
+            block_structure=block_structure,  # NEW: Variable block widths
             broken_seats=broken_seats,
             batch_student_counts=batch_counts,
             batch_colors=batch_colors,

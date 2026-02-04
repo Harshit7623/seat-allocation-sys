@@ -100,6 +100,7 @@ const AllocationPage = ({ showToast }) => {
   const [rows, setRows] = useState(8);
   const [cols, setCols] = useState(10);
   const [blockWidth, setBlockWidth] = useState(2);
+  const [blockStructure, setBlockStructure] = useState(null); // Array of block widths e.g. [3, 2, 3, 2]
   const [brokenSeats, setBrokenSeats] = useState("");
   
   // Layout options
@@ -253,6 +254,8 @@ const AllocationPage = ({ showToast }) => {
       setCols(room.cols);
       setBrokenSeats(room.broken_seats || "");
       setBlockWidth(room.block_width || 1);
+      // Capture block_structure for variable block widths
+      setBlockStructure(room.block_structure || null);
       if (showToast) showToast(`✅ Loaded ${room.name}`, "success");
     }
   };
@@ -313,6 +316,7 @@ const AllocationPage = ({ showToast }) => {
       rows,
       cols,
       block_width: blockWidth,
+      block_structure: blockStructure, // Variable block widths array
       broken_seats: parseBrokenSeats(),
       num_batches: selectedBatchesData.length,
       batch_by_column: batchByColumn,
@@ -583,6 +587,10 @@ const AllocationPage = ({ showToast }) => {
       const token = localStorage.getItem('token');
       const payload = preparePayload();
       payload.seating = webData.seating;
+      // Include metadata from webData which contains block_structure from algorithm
+      if (webData.metadata) {
+        payload.metadata = webData.metadata;
+      }
       const res = await fetch('/api/generate-pdf', {
         method: 'POST',
         headers: {
@@ -1132,11 +1140,30 @@ if (initializing) {
             ) : (
               <div className="flex-1 bg-gray-50 dark:bg-gray-950 p-6 md:p-10 overflow-auto custom-scrollbar relative z-10 rounded-xl">
                 {Array.isArray(webData.seating) && (() => {
+                  // Use block_structure if available, otherwise fall back to block_width
+                  const effectiveBlockStructure = webData?.metadata?.block_structure || blockStructure;
                   const bw = webData?.metadata?.block_width || blockWidth;
+                  
+                  // Calculate aisle positions based on block_structure or uniform block_width
+                  const aisleAfterCols = new Set();
+                  if (effectiveBlockStructure && Array.isArray(effectiveBlockStructure) && effectiveBlockStructure.length > 0) {
+                    // Variable block widths: insert aisle after cumulative sum
+                    let cumulative = 0;
+                    for (let i = 0; i < effectiveBlockStructure.length - 1; i++) {
+                      cumulative += effectiveBlockStructure[i];
+                      aisleAfterCols.add(cumulative - 1); // Convert to 0-indexed column where aisle follows
+                    }
+                  } else {
+                    // Uniform block_width: insert aisle every bw columns
+                    for (let i = bw - 1; i < cols - 1; i += bw) {
+                      aisleAfterCols.add(i);
+                    }
+                  }
+                  
                   const columnStyles = [];
                   for(let i = 0; i < cols; i++) {
                     columnStyles.push('minmax(160px, 1fr)');
-                    if ((i + 1) % bw === 0 && (i + 1) !== cols) {
+                    if (aisleAfterCols.has(i)) {
                       columnStyles.push('40px'); // Aisle gap
                     }
                   }
@@ -1200,7 +1227,7 @@ if (initializing) {
                                 </motion.div>
                               );
                             })()}
-                            {(cIdx + 1) % bw === 0 && (cIdx + 1) !== cols && <div key={`spacer-${rIdx}-${cIdx}`} className="w-10" />}
+                            {aisleAfterCols.has(cIdx) && <div key={`spacer-${rIdx}-${cIdx}`} className="w-10" />}
                           </React.Fragment>
                         ))
                       )}
