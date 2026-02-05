@@ -351,6 +351,16 @@ class AllocationService:
             """, (session_id, target_classroom))
             deleted = cursor.rowcount
             
+            # Also delete any external students manually added to this room
+            try:
+                db.execute("""
+                    DELETE FROM external_students 
+                    WHERE session_id = ? AND room_no = ?
+                """, (session_id, classroom_name))
+                logger.info(f"Cleared external students for room {classroom_name}")
+            except Exception as e:
+                logger.warning(f"Could not clear external students: {e}")
+            
             # Update session count
             db.execute("""
                 UPDATE allocation_sessions

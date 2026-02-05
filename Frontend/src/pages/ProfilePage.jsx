@@ -141,7 +141,7 @@ const ProfilePage = ({ showToast }) => {
               {!isEditing && (
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="inline-flex items-center gap-2 px-5 py-3 bg-white/20 backdrop-blur-md text-white border-2 border-white/30 rounded-lg hover:bg-white/30 transition-all duration-200 font-medium shadow-lg hover:shadow-xl hover:scale-105 group"
+                  className="inline-flex items-center gap-2 px-5 py-3 bg-white/20 backdrop-blur-md text-white border-2 border-white/30 rounded-lg hover:bg-white/30 transition-all duration-200 font-medium shadow-lg hover:scale-105 group"
                 >
                   <Edit2 size={18} className="group-hover:rotate-12 transition-transform" />
                   Edit Profile
@@ -272,7 +272,7 @@ const ProfilePage = ({ showToast }) => {
                 <button
                   onClick={handleSave}
                   disabled={loading}
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all duration-200 font-semibold disabled:opacity-60 disabled:cursor-not-allowed shadow-lg hover:shadow-xl hover:scale-[1.02]"
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all duration-200 font-semibold disabled:opacity-60 disabled:cursor-not-allowed shadow-lg hover:scale-[1.02]"
                 >
                   {loading ? (
                     <>
@@ -301,7 +301,7 @@ const ProfilePage = ({ showToast }) => {
             <div className="pt-8 border-t border-[#c0c0c0] dark:border-[#8a8a8a]">
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] group"
+                className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 font-semibold shadow-lg hover:scale-[1.02] group"
               >
                 <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
                 Logout from Account

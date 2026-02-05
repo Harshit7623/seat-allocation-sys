@@ -196,7 +196,7 @@ const SignupPage = ({ showToast }) => {
             <button
               type="submit"
               disabled={loading}
-              className="group w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white py-3.5 rounded-xl hover:from-orange-600 hover:to-amber-600 transition-all duration-200 font-bold disabled:opacity-60 disabled:cursor-not-allowed mt-6 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-[1.02]"
+              className="group w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white py-3.5 rounded-xl hover:from-orange-600 hover:to-amber-600 transition-all duration-200 font-bold disabled:opacity-60 disabled:cursor-not-allowed mt-6 flex items-center justify-center gap-2 shadow-lg hover:scale-[1.02]"
             >
               {loading ? (
                 <>

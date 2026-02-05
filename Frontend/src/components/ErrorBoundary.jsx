@@ -90,7 +90,7 @@ class ErrorBoundary extends React.Component {
 
             <button
               onClick={this.handleReset}
-              className="w-full h-14 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+              className="w-full h-14 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
             >
               <RefreshCw className="w-5 h-5" />
               <span>Clear Cache & Restart</span>

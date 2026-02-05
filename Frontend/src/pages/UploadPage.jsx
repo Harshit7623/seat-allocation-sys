@@ -490,7 +490,7 @@ const UploadPage = ({ showToast }) => {
             {!hasActiveSession && (
               <button
                 onClick={handleStartSession}
-                className="w-full h-14 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-lg font-bold uppercase tracking-wide rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                className="w-full h-14 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-lg font-bold uppercase tracking-wide rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
               >
                 <Zap className="w-5 h-5" />
                 <span>Start Allocation Session</span>
@@ -501,7 +501,7 @@ const UploadPage = ({ showToast }) => {
             {hasActiveSession && (
               <button
                 onClick={handleContinueExisting}
-                className="w-full h-14 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white text-lg font-bold uppercase tracking-wide rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                className="w-full h-14 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white text-lg font-bold uppercase tracking-wide rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
               >
                 <ArrowRight className="w-5 h-5" />
                 <span>Continue to Allocation</span>
@@ -550,7 +550,7 @@ const UploadPage = ({ showToast }) => {
                     <button 
                       onClick={handleUpload}
                       disabled={uploading}
-                      className="w-full h-14 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:from-gray-300 disabled:to-gray-400 text-white text-lg font-bold uppercase tracking-wide rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                      className="w-full h-14 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:from-gray-300 disabled:to-gray-400 text-white text-lg font-bold uppercase tracking-wide rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
                     >
                       {uploading ? (
                         <>
@@ -591,7 +591,7 @@ const UploadPage = ({ showToast }) => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   onClick={() => downloadTemplate('students_mode1.csv')}
-                  className="flex items-center gap-3 px-4 py-4 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-orange-500 dark:hover:border-orange-400 hover:shadow-lg transition-all group cursor-pointer"
+                  className="flex items-center gap-3 px-4 py-4 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-orange-500 dark:hover:border-orange-400 transition-all group cursor-pointer"
                 >
                   <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg group-hover:bg-orange-500 transition-colors">
                     <Download className="w-5 h-5 text-orange-600 dark:text-orange-400 group-hover:text-white" />
@@ -608,7 +608,7 @@ const UploadPage = ({ showToast }) => {
                 </button>
                 <button
                   onClick={() => downloadTemplate('students_mode2.csv')}
-                  className="flex items-center gap-3 px-4 py-4 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-orange-500 dark:hover:border-orange-400 hover:shadow-lg transition-all group cursor-pointer"
+                  className="flex items-center gap-3 px-4 py-4 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-orange-500 dark:hover:border-orange-400 transition-all group cursor-pointer"
                 >
                   <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg group-hover:bg-orange-500 transition-colors">
                     <Download className="w-5 h-5 text-orange-600 dark:text-orange-400 group-hover:text-white" />
@@ -625,7 +625,7 @@ const UploadPage = ({ showToast }) => {
                 </button>
                 <button
                   onClick={() => downloadTemplate('CSE_Batch_10.csv')}
-                  className="flex items-center gap-3 px-4 py-4 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-orange-500 dark:hover:border-orange-400 hover:shadow-lg transition-all group cursor-pointer"
+                  className="flex items-center gap-3 px-4 py-4 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-orange-500 dark:hover:border-orange-400 transition-all group cursor-pointer"
                 >
                   <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg group-hover:bg-orange-500 transition-colors">
                     <Download className="w-5 h-5 text-orange-600 dark:text-orange-400 group-hover:text-white" />
@@ -835,7 +835,7 @@ const UploadPage = ({ showToast }) => {
                         className={`px-6 py-3 text-lg font-bold uppercase rounded-xl transition-all flex items-center gap-2 ${
                           commitLoading 
                             ? "bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-400 cursor-not-allowed" 
-                            : "bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white shadow-lg hover:shadow-xl"
+                            : "bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white shadow-lg"
                         }`}
                       >
                         {commitLoading ? (

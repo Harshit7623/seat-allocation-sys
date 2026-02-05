@@ -355,7 +355,7 @@ export default function ClassroomPage({ showToast }) {
                     className={`w-full text-left p-4 rounded-xl transition-all duration-200 border-2 group ${
                       selectedRoomId === room.id 
                         ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20 shadow-lg" 
-                        : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-orange-500 dark:hover:border-orange-400 hover:shadow-md"
+                        : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-orange-500 dark:hover:border-orange-400"
                     }`}
                   >
                     <div className="flex justify-between items-center mb-2">
@@ -578,7 +578,7 @@ export default function ClassroomPage({ showToast }) {
                             className={`h-12 w-12 rounded-xl flex items-center justify-center text-xs font-bold transition-all duration-200 border-2 shadow-sm ${
                               isBroken 
                                 ? "bg-red-50 dark:bg-red-900/20 border-red-500 dark:border-red-600 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 shadow-red-500/20" 
-                                : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-600 hover:border-orange-500 dark:hover:border-orange-400 hover:text-orange-500 hover:-translate-y-1 hover:shadow-lg"
+                                : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-600 hover:border-orange-500 dark:hover:border-orange-400 hover:text-orange-500 hover:-translate-y-1"
                             }`}
                             title={`Row ${r}, Col ${c}${isBroken ? ' (Broken)' : ''}`}
                           >

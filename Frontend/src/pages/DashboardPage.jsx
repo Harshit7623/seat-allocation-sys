@@ -69,7 +69,7 @@ const StatCard = ({ stat, index, loading }) => {
   return (
     <div
       style={cardStyle}
-      className="glass-card bg-white dark:bg-gray-800 relative overflow-hidden p-6 border-2 border-gray-200 dark:border-gray-700 hover:border-orange-500/50 dark:hover:border-orange-400/50 hover:shadow-xl transition-all duration-300 group rounded-2xl"
+      className="glass-card bg-white dark:bg-gray-800 relative overflow-hidden p-6 border-2 border-gray-200 dark:border-gray-700 hover:border-orange-500/50 dark:hover:border-orange-400/50 transition-all duration-300 group rounded-2xl"
     >
       {/* Background Icon */}
       <div className="absolute top-0 right-0 p-4 opacity-5 transform rotate-12 group-hover:scale-110 transition-transform duration-500">
@@ -454,7 +454,7 @@ const DashboardPage = () => {
               <button
                 key={index}
                 onClick={() => action.page === 'download-report' ? handleDownload() : navigate(`/${action.page}`)}
-                className="glass-card flex flex-col items-center gap-3 p-6 border-2 border-gray-200 dark:border-gray-700 rounded-2xl hover:border-orange-500 dark:hover:border-orange-400 hover:shadow-xl transition-all duration-300 bg-white dark:bg-gray-800 group"
+                className="glass-card flex flex-col items-center gap-3 p-6 border-2 border-gray-200 dark:border-gray-700 rounded-2xl hover:border-orange-500 dark:hover:border-orange-400 transition-all duration-300 bg-white dark:bg-gray-800 group"
               >
                 <div className={`${action.bgColor} p-4 rounded-xl shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
                   <action.icon className="text-white" size={24} />
@@ -628,14 +628,6 @@ const DashboardPage = () => {
           -webkit-mask-composite: xor;
           mask-composite: exclude;
           pointer-events: none;
-        }
-
-        .dark .glass-card:hover {
-          transform: translateY(-2px);
-
-          box-shadow:
-            0 14px 40px rgba(0, 0, 0, 0.75),
-            inset 0 0 0 1px rgba(203, 213, 225, 0.08);
         }
         
       `}</style>

@@ -493,7 +493,7 @@ function TemplateEditor({ showToast }) {
                         <button
                             onClick={handleSubmit}
                             disabled={saving}
-                            className="inline-flex items-center gap-2 px-6 py-3.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all duration-200 font-semibold disabled:opacity-60 disabled:cursor-not-allowed shadow-lg hover:shadow-xl hover:scale-[1.02] group"
+                            className="inline-flex items-center gap-2 px-6 py-3.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all duration-200 font-semibold disabled:opacity-60 disabled:cursor-not-allowed shadow-lg hover:scale-[1.02] group"
                         >
                             {saving ? (
                                 <>
@@ -511,7 +511,7 @@ function TemplateEditor({ showToast }) {
                         <button
                             onClick={generateTestPDF}
                             disabled={generating}
-                            className="inline-flex items-center gap-2 px-6 py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl hover:from-orange-600 hover:to-amber-600 transition-all duration-200 font-semibold disabled:opacity-60 disabled:cursor-not-allowed shadow-lg hover:shadow-xl hover:scale-[1.02] group"
+                            className="inline-flex items-center gap-2 px-6 py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl hover:from-orange-600 hover:to-amber-600 transition-all duration-200 font-semibold disabled:opacity-60 disabled:cursor-not-allowed shadow-lg hover:scale-[1.02] group"
                         >
                             {generating ? (
                                 <>
@@ -528,7 +528,7 @@ function TemplateEditor({ showToast }) {
 
                         <button
                             onClick={() => window.location.reload()}
-                            className="inline-flex items-center gap-2 px-6 py-3.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] group"
+                            className="inline-flex items-center gap-2 px-6 py-3.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200 font-semibold shadow-lg hover:scale-[1.02] group"
                         >
                             <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-500" />
                             Reload Template

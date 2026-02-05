@@ -627,7 +627,7 @@ const AdminFeedbackPage = ({ showToast }) => {
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-orange-500 to-amber-600 text-white hover:shadow-lg transition-all"
+                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-orange-500 to-amber-600 text-white transition-all"
                 >
                   Mark as Resolved
                 </motion.button>

@@ -171,7 +171,36 @@ def ensure_demo_db():
         """)
 
         # ====================================================================
-        # 9. FEEDBACK TABLE
+        # 9. EXTERNAL STUDENTS TABLE (Manual additions to empty seats)
+        # ====================================================================
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS external_students (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                plan_id TEXT NOT NULL,
+                room_no TEXT NOT NULL,
+                seat_position TEXT NOT NULL,
+                seat_row INTEGER NOT NULL,
+                seat_col INTEGER NOT NULL,
+                roll_number TEXT NOT NULL,
+                student_name TEXT,
+                batch_label TEXT NOT NULL,
+                batch_color TEXT DEFAULT '#3b82f6',
+                paper_set TEXT DEFAULT 'A',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES allocation_sessions(session_id) ON DELETE CASCADE,
+                UNIQUE(session_id, room_no, seat_position)
+            );
+        """)
+        
+        # Create index for faster lookups
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_external_students_session 
+            ON external_students(session_id, room_no);
+        """)
+
+        # ====================================================================
+        # 10. FEEDBACK TABLE
         # ====================================================================
         cur.execute("""
             CREATE TABLE IF NOT EXISTS feedback (

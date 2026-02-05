@@ -44,22 +44,13 @@
   pointer-events: none;
 }
 
+/* Hover states - no shadow glow */
+.glass-card:hover {
+  transform: translateY(-2px);
+}
+
 .dark .glass-card:hover {
   transform: translateY(-2px);
-
-  box-shadow:
-    0 14px 40px rgba(0, 0, 0, 0.75),
-    inset 0 0 0 1px rgba(203, 213, 225, 0.08);
-}
-
-
-/* Hover states */
-.glass-card:hover {
-  box-shadow: 0 0 32px rgba(192, 192, 192, 0.3);
-}
-
-.dark .glass-card:hover {
-  box-shadow: 0 0 32px rgba(138, 138, 138, 0.35);
 }
 
 /* For cards with custom border colors */

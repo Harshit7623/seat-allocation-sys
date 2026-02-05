@@ -283,3 +283,133 @@ class CacheManager:
             'avg_students_per_plan': round(total_students / len(snapshots), 1) if snapshots else 0,
             'avg_rooms_per_plan': round(total_rooms / len(snapshots), 1) if snapshots else 0
         }
+
+    # ==================================================
+    # PATCH SINGLE SEAT - For external student additions
+    # ==================================================
+    def patch_seat(self, plan_id: str, room_no: str, row: int, col: int, seat_data: dict) -> bool:
+        """
+        Update a single seat in the cache without regenerating the entire plan.
+        Used for adding/removing external students to empty seats.
+        
+        Args:
+            plan_id: The plan ID to update
+            room_no: The room name/number
+            row: 0-indexed row of the seat
+            col: 0-indexed column of the seat
+            seat_data: New seat data to replace existing
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        data = self.load_snapshot(plan_id)
+        if not data or "rooms" not in data:
+            logger.warning(f"Cannot patch seat: Plan {plan_id} not found")
+            return False
+        
+        if room_no not in data["rooms"]:
+            logger.warning(f"Cannot patch seat: Room {room_no} not found in plan")
+            return False
+        
+        room_data = data["rooms"][room_no]
+        seating_matrix = room_data.get("raw_matrix", [])
+        
+        # Validate coordinates
+        if row < 0 or row >= len(seating_matrix):
+            logger.warning(f"Invalid row {row} for seat patch")
+            return False
+        if col < 0 or col >= len(seating_matrix[row]):
+            logger.warning(f"Invalid col {col} for seat patch")
+            return False
+        
+        # 1. Update the raw_matrix
+        old_seat = seating_matrix[row][col]
+        seating_matrix[row][col] = {**old_seat, **seat_data}
+        
+        # 2. Update the batches structure if adding a student
+        if seat_data.get('roll_number') and not seat_data.get('is_unallocated'):
+            batch_label = seat_data.get('batch_label', 'External')
+            
+            if "batches" not in room_data:
+                room_data["batches"] = {}
+            
+            if batch_label not in room_data["batches"]:
+                room_data["batches"][batch_label] = {
+                    "info": {"degree": "External", "branch": "N/A", "joining_year": "N/A"},
+                    "students": []
+                }
+            
+            # Add student to batch list (avoid duplicates)
+            student_entry = {
+                "batch": seat_data.get('batch', 0),
+                "batch_label": batch_label,
+                "block": seat_data.get('block', 0),
+                "position": seat_data.get('position'),
+                "roll_number": seat_data.get('roll_number'),
+                "student_name": seat_data.get('student_name'),
+                "paper_set": seat_data.get('paper_set'),
+                "color": seat_data.get('color'),
+                "room_no": room_no,
+                "is_external": True
+            }
+            
+            # Remove any existing entry for this position
+            room_data["batches"][batch_label]["students"] = [
+                s for s in room_data["batches"][batch_label]["students"]
+                if s.get('position') != seat_data.get('position')
+            ]
+            room_data["batches"][batch_label]["students"].append(student_entry)
+        
+        # 3. If removing a student (clearing seat), update batch list
+        elif seat_data.get('is_unallocated'):
+            position = seat_data.get('position') or old_seat.get('position')
+            for batch_label, batch_data in room_data.get("batches", {}).items():
+                batch_data["students"] = [
+                    s for s in batch_data["students"]
+                    if s.get('position') != position
+                ]
+        
+        # 4. Recalculate student count
+        all_seats = [seat for row in seating_matrix for seat in row 
+                     if seat and not seat.get('is_broken') and not seat.get('is_unallocated')]
+        room_data["student_count"] = len(all_seats)
+        
+        # 5. Update metadata
+        data["metadata"]["last_updated"] = datetime.now().isoformat()
+        data["metadata"]["total_students"] = sum(
+            r.get('student_count', 0) for r in data["rooms"].values()
+        )
+        
+        # 6. Save updated data
+        file_path = self.get_file_path(plan_id)
+        with open(file_path, 'w') as f:
+            json.dump(data, f, indent=4, cls=AlgoEncoder)
+        
+        logger.info(f"✅ Patched seat [{row},{col}] in room {room_no} of plan {plan_id}")
+        return True
+    
+    def get_empty_seats(self, plan_id: str, room_no: str) -> list:
+        """
+        Get all empty (unallocated, non-broken) seats in a room.
+        
+        Returns:
+            List of seat info dicts with position, row, col
+        """
+        data = self.load_snapshot(plan_id, silent=True)
+        if not data or "rooms" not in data or room_no not in data["rooms"]:
+            return []
+        
+        room_data = data["rooms"][room_no]
+        seating_matrix = room_data.get("raw_matrix", [])
+        
+        empty_seats = []
+        for row_idx, row in enumerate(seating_matrix):
+            for col_idx, seat in enumerate(row):
+                if seat and seat.get('is_unallocated') and not seat.get('is_broken'):
+                    empty_seats.append({
+                        "position": seat.get('position', f"{chr(65 + row_idx)}{col_idx + 1}"),
+                        "row": row_idx,
+                        "col": col_idx
+                    })
+        
+        return empty_seats

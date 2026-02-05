@@ -6,7 +6,8 @@ import {
   Users, Layout, MapPin, Download, Play, Monitor, 
   Loader2, AlertCircle, RefreshCw, CheckCircle2,
   Trash2, Flame, UserCheck, Undo2, BarChart3,
-  ArrowRight, AlertTriangle, Info, X, ShieldCheck, XCircle, LogOut
+  ArrowRight, AlertTriangle, Info, X, ShieldCheck, XCircle, LogOut,
+  UserPlus, Palette
 } from 'lucide-react';
 
 const Card = ({ className, children, ref }) => <div ref={ref} className={`glass-card ${className}`}>{children}</div>;
@@ -122,6 +123,19 @@ const AllocationPage = ({ showToast }) => {
   const [stats, setStats] = useState(null);
   const [usedRoomIds, setUsedRoomIds] = useState([]);
   const [selectedRoomName, setSelectedRoomName] = useState("");
+
+  // External Student Modal State
+  const [showExternalModal, setShowExternalModal] = useState(false);
+  const [selectedEmptySeat, setSelectedEmptySeat] = useState(null);
+  const [externalStudent, setExternalStudent] = useState({
+    roll_number: '',
+    student_name: '',
+    batch_label: '',
+    batch_color: '#3b82f6'
+  });
+  const [roomBatches, setRoomBatches] = useState([]);
+  const [addingExternal, setAddingExternal] = useState(false);
+  const [showNewBatchInput, setShowNewBatchInput] = useState(false);
 
   const chartRef = useRef();
 
@@ -283,17 +297,23 @@ const AllocationPage = ({ showToast }) => {
   };
 
   // ============================================================================
-  // PREPARE PAYLOAD - ONLY SELECTED BATCHES
+  // PREPARE PAYLOAD - ONLY SELECTED BATCHES (IN USER-SPECIFIED ORDER)
   // ============================================================================
   const preparePayload = () => {
     const validBatchIds = selectedBatchIds.filter(id => id !== null);
-    const selectedBatchesData = uploadedBatches.filter(b => validBatchIds.includes(b.batch_id));
+    
+    // CRITICAL: Map from selectedBatchIds order to maintain user-specified sequence
+    // Instead of filtering uploadedBatches (which maintains upload order),
+    // we iterate through validBatchIds to preserve the order user selected
+    const selectedBatchesData = validBatchIds
+      .map(id => uploadedBatches.find(b => b.batch_id === id))
+      .filter(Boolean); // Remove any undefined entries
 
     if (selectedBatchesData.length === 0) {
       throw new Error('No batches selected');
     }
 
-    // Build batch data ONLY for selected batches
+    // Build batch data in the ORDER user specified (via selectedBatchIds)
     const batchCounts = {};
     const batchLabels = {};
     const batchColors = {};
@@ -305,7 +325,7 @@ const AllocationPage = ({ showToast }) => {
       batchColors[batchIndex] = batch.batch_color || '#3b82f6';
     });
 
-    console.log('📤 Payload - Selected batches:', selectedBatchesData.map(b => b.batch_name));
+    console.log('📤 Payload - Selected batches (user order):', selectedBatchesData.map(b => b.batch_name));
     console.log('📤 Batch counts:', batchCounts);
     console.log('📤 Batch colors:', batchColors);
 
@@ -615,13 +635,157 @@ const AllocationPage = ({ showToast }) => {
     }
   };
 
-// ============================================================================
-// NO SESSION
-// ============================================================================
+  // ============================================================================
+  // EXTERNAL STUDENT FUNCTIONS
+  // ============================================================================
+  
+  const loadRoomBatches = async () => {
+    if (!session?.session_id || !selectedRoomName) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/sessions/${session.session_id}/rooms/${encodeURIComponent(selectedRoomName)}/batches`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        setRoomBatches(data.batches || []);
+      }
+    } catch (e) {
+      console.error('Failed to load room batches:', e);
+    }
+  };
 
-// LOADING STATE
+  const handleEmptySeatClick = async (seat, rowIdx, colIdx) => {
+    // Load room batches for dropdown
+    await loadRoomBatches();
+    
+    setSelectedEmptySeat({
+      position: seat?.position || `${String.fromCharCode(65 + rowIdx)}${colIdx + 1}`,
+      row: rowIdx,
+      col: colIdx
+    });
+    setExternalStudent({
+      roll_number: '',
+      student_name: '',
+      batch_label: roomBatches.length > 0 ? roomBatches[0].label : '',
+      batch_color: roomBatches.length > 0 ? roomBatches[0].color : '#3b82f6'
+    });
+    setShowNewBatchInput(false);
+    setShowExternalModal(true);
+  };
 
-if (initializing) {
+  const handleAddExternalStudent = async () => {
+    if (!externalStudent.roll_number || !externalStudent.batch_label) {
+      if (showToast) showToast("Roll number and batch are required", "error");
+      return;
+    }
+    
+    setAddingExternal(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/sessions/${session.session_id}/rooms/${encodeURIComponent(selectedRoomName)}/add-external-student`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        },
+        body: JSON.stringify({
+          seat_position: selectedEmptySeat.position,
+          seat_row: selectedEmptySeat.row,
+          seat_col: selectedEmptySeat.col,
+          roll_number: externalStudent.roll_number,
+          student_name: externalStudent.student_name,
+          batch_label: externalStudent.batch_label,
+          batch_color: externalStudent.batch_color
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to add student');
+      }
+      
+      // Update webData locally with the new student
+      if (webData && data.seat) {
+        const newSeating = [...webData.seating];
+        newSeating[selectedEmptySeat.row][selectedEmptySeat.col] = data.seat;
+        setWebData({ ...webData, seating: newSeating });
+      }
+      
+      if (showToast) showToast(`Student ${externalStudent.roll_number} added to seat ${selectedEmptySeat.position}`, "success");
+      setShowExternalModal(false);
+      setSelectedEmptySeat(null);
+      
+    } catch (e) {
+      if (showToast) showToast(e.message, "error");
+    } finally {
+      setAddingExternal(false);
+    }
+  };
+
+  const handleRemoveExternalStudent = async (seat, rowIdx, colIdx) => {
+    if (!window.confirm(`Remove ${seat.roll_number} from this seat?`)) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/sessions/${session.session_id}/rooms/${encodeURIComponent(selectedRoomName)}/remove-external-student`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        },
+        body: JSON.stringify({
+          seat_position: seat.position
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to remove student');
+      }
+      
+      // Update webData locally - mark seat as unallocated
+      if (webData) {
+        const newSeating = [...webData.seating];
+        newSeating[rowIdx][colIdx] = {
+          ...newSeating[rowIdx][colIdx],
+          roll_number: null,
+          student_name: null,
+          batch_label: null,
+          is_unallocated: true,
+          is_external: false,
+          color: '#F3F4F6'
+        };
+        setWebData({ ...webData, seating: newSeating });
+      }
+      
+      if (showToast) showToast("External student removed", "success");
+      
+    } catch (e) {
+      if (showToast) showToast(e.message, "error");
+    }
+  };
+
+  const batchColorOptions = [
+    { name: 'Blue', value: '#3b82f6' },
+    { name: 'Orange', value: '#f97316' },
+    { name: 'Green', value: '#22c55e' },
+    { name: 'Purple', value: '#a855f7' },
+    { name: 'Pink', value: '#ec4899' },
+    { name: 'Cyan', value: '#06b6d4' },
+    { name: 'Yellow', value: '#eab308' },
+    { name: 'Red', value: '#ef4444' }
+  ];
+
+  // ============================================================================
+  // NO SESSION
+  // ============================================================================
+
+  // LOADING STATE
+
+  if (initializing) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-[#050505] flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -1011,7 +1175,7 @@ if (initializing) {
               <Button 
                 onClick={generate} 
                 disabled={loading || pendingCount === 0 || !selectedRoomId || selectedBatchIds.filter(id => id !== null).length === 0}
-                className="w-full h-14 bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 shadow-lg hover:shadow-xl text-base font-black uppercase tracking-wide"
+                className="w-full h-14 bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 shadow-lg text-base font-black uppercase tracking-wide"
               >
                 {loading ? (
                   <>
@@ -1177,32 +1341,66 @@ if (initializing) {
                               const seatIndex = rIdx * cols + cIdx + 1;
                               const isBroken = seat?.is_broken;
                               const isAllocated = !isBroken && !seat?.is_unallocated;
+                              const isExternal = seat?.is_external;
                               const deskRow = rIdx + 1;
                               const deskCol = cIdx + 1;
+                              const isEmpty = !isBroken && seat?.is_unallocated;
+                              
                               return (
                                 <motion.div
                                   initial={{ opacity: 0, scale: 0.85, y: 20 }}
                                   animate={{ opacity: 1, scale: 1, y: 0 }}
                                   transition={{ delay: (rIdx * cols + cIdx) * 0.003, type: "spring", stiffness: 300, damping: 24 }}
-                                  className={`relative flex flex-col items-center justify-between p-4 transition-all duration-200 border-2 rounded-xl bg-white dark:bg-gray-900 shadow-sm hover:shadow-md min-h-[140px] w-full group cursor-pointer ${
+                                  onClick={() => {
+                                    if (isEmpty) {
+                                      handleEmptySeatClick(seat, rIdx, cIdx);
+                                    }
+                                  }}
+                                  className={`relative flex flex-col items-center justify-between p-4 transition-all duration-200 border-2 rounded-xl bg-white dark:bg-gray-900 shadow-sm min-h-[140px] w-full group cursor-pointer ${
                                     isBroken 
                                       ? 'border-red-200 bg-red-50/20 dark:bg-red-900/10' 
                                       : isAllocated 
-                                        ? 'border-gray-200 dark:border-gray-800 hover:border-orange-400 hover:scale-[1.02]' 
-                                        : 'border-dashed border-gray-200 dark:border-gray-800 opacity-40'
+                                        ? `border-gray-200 dark:border-gray-800 hover:border-orange-400 hover:scale-[1.02] ${isExternal ? 'ring-2 ring-purple-400 ring-offset-2 dark:ring-offset-gray-900' : ''}` 
+                                        : 'border-dashed border-gray-300 dark:border-gray-700 hover:border-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 opacity-60 hover:opacity-100'
                                   }`}
                                 >
                                   {isAllocated && (
                                     <div className="absolute top-0 inset-x-0 h-1.5 rounded-t-xl" style={{ backgroundColor: seat.color }} />
                                   )}
+                                  {/* External student indicator badge */}
+                                  {isExternal && (
+                                    <div className="absolute -top-2 -right-2 bg-purple-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider shadow-lg">
+                                      Manual
+                                    </div>
+                                  )}
                                   {isAllocated ? (
                                     <>
-                                      <span className="text-[11px] font-extrabold text-gray-400 dark:text-gray-500 uppercase tracking-tighter">
-                                        {seat.batch_label || `B-${seat.batch}`}
-                                      </span>
+                                      <div className="flex items-center justify-between w-full">
+                                        <span className="text-[11px] font-extrabold text-gray-400 dark:text-gray-500 uppercase tracking-tighter">
+                                          {seat.batch_label || `B-${seat.batch}`}
+                                        </span>
+                                        {/* Remove button for external students */}
+                                        {isExternal && (
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleRemoveExternalStudent(seat, rIdx, cIdx);
+                                            }}
+                                            className="p-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-500 hover:bg-red-200 dark:hover:bg-red-800/50 transition-colors"
+                                            title="Remove external student"
+                                          >
+                                            <X size={12} />
+                                          </button>
+                                        )}
+                                      </div>
                                       <span className="text-lg font-black text-gray-900 dark:text-white leading-tight my-3 group-hover:text-orange-600 transition-colors text-center whitespace-nowrap w-full px-1">
                                         {seat.roll_number}
                                       </span>
+                                      {seat.student_name && (
+                                        <span className="text-[10px] text-gray-500 dark:text-gray-400 truncate w-full text-center mb-1">
+                                          {seat.student_name}
+                                        </span>
+                                      )}
                                       <div className="w-full flex justify-between items-center gap-1.5 pt-2 border-t border-gray-100 dark:border-gray-800 mt-auto">
                                         <div className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
                                           <span className="text-xs font-mono font-extrabold text-gray-600 dark:text-gray-400 uppercase">SET: {seat.paper_set || 'A'}</span>
@@ -1220,8 +1418,10 @@ if (initializing) {
                                       <span className="text-[10px] font-bold text-red-500 uppercase">Broken</span>
                                     </div>
                                   ) : (
-                                    <div className="flex items-center justify-center h-full">
-                                      <span className="text-xs font-mono text-gray-300 dark:text-gray-700">{seatIndex}</span>
+                                    <div className="flex flex-col items-center justify-center h-full gap-2">
+                                      <UserPlus className="w-6 h-6 text-gray-300 dark:text-gray-600 group-hover:text-orange-500 transition-colors" />
+                                      <span className="text-[10px] font-bold text-gray-400 dark:text-gray-600 uppercase group-hover:text-orange-600">Click to Add</span>
+                                      <span className="text-xs font-mono text-gray-300 dark:text-gray-700">{deskRow}-{deskCol}</span>
                                     </div>
                                   )}
                                 </motion.div>
@@ -1239,6 +1439,194 @@ if (initializing) {
           </Card>
         </div>
       </div>
+      
+      {/* External Student Modal */}
+      <AnimatePresence>
+        {showExternalModal && selectedEmptySeat && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setShowExternalModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="glass-card bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 w-full max-w-md shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-xl shadow-lg">
+                    <UserPlus className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tight">
+                      Add External Student
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                      Seat {selectedEmptySeat.position} in Room {selectedRoomName}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowExternalModal(false)}
+                  className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              {/* Form */}
+              <div className="space-y-4">
+                {/* Roll Number */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">
+                    Roll Number *
+                  </label>
+                  <Input
+                    value={externalStudent.roll_number}
+                    onChange={(e) => setExternalStudent({ ...externalStudent, roll_number: e.target.value.toUpperCase() })}
+                    placeholder="e.g., BTCS2401099"
+                    className="font-mono"
+                  />
+                </div>
+
+                {/* Student Name */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">
+                    Student Name (Optional)
+                  </label>
+                  <Input
+                    value={externalStudent.student_name}
+                    onChange={(e) => setExternalStudent({ ...externalStudent, student_name: e.target.value })}
+                    placeholder="e.g., John Doe"
+                  />
+                </div>
+
+                {/* Batch Selection */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">
+                    Batch *
+                  </label>
+                  {!showNewBatchInput ? (
+                    <div className="space-y-2">
+                      <select
+                        value={externalStudent.batch_label}
+                        onChange={(e) => {
+                          if (e.target.value === '__NEW__') {
+                            setShowNewBatchInput(true);
+                            setExternalStudent({ ...externalStudent, batch_label: '', batch_color: '#3b82f6' });
+                          } else {
+                            const selected = roomBatches.find(b => b.label === e.target.value);
+                            setExternalStudent({ 
+                              ...externalStudent, 
+                              batch_label: e.target.value,
+                              batch_color: selected?.color || '#3b82f6'
+                            });
+                          }
+                        }}
+                        className="flex h-10 w-full rounded-lg border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 dark:text-white"
+                      >
+                        <option value="">Select batch...</option>
+                        {roomBatches.map((batch) => (
+                          <option key={batch.label} value={batch.label}>
+                            {batch.label}
+                          </option>
+                        ))}
+                        <option value="__NEW__">+ Add New Batch</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex gap-2">
+                        <Input
+                          value={externalStudent.batch_label}
+                          onChange={(e) => setExternalStudent({ ...externalStudent, batch_label: e.target.value.toUpperCase() })}
+                          placeholder="e.g., CSE, ECE, MAC"
+                          className="flex-1"
+                        />
+                        <button
+                          onClick={() => {
+                            setShowNewBatchInput(false);
+                            setExternalStudent({ ...externalStudent, batch_label: roomBatches[0]?.label || '', batch_color: roomBatches[0]?.color || '#3b82f6' });
+                          }}
+                          className="px-3 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm font-bold"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      
+                      {/* Color Picker */}
+                      <div>
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-1.5">
+                          <Palette size={12} /> Batch Color
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {batchColorOptions.map((color) => (
+                            <button
+                              key={color.value}
+                              onClick={() => setExternalStudent({ ...externalStudent, batch_color: color.value })}
+                              className={`w-8 h-8 rounded-lg transition-all ${
+                                externalStudent.batch_color === color.value 
+                                  ? 'ring-2 ring-offset-2 ring-gray-400 dark:ring-offset-gray-900 scale-110' 
+                                  : 'hover:scale-105'
+                              }`}
+                              style={{ backgroundColor: color.value }}
+                              title={color.name}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Paper Set Info */}
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
+                  <div className="flex items-start gap-2">
+                    <Info className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                    <p className="text-xs text-blue-700 dark:text-blue-300 font-medium">
+                      Paper set will be automatically calculated based on adjacent seats to ensure proper alternation.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 mt-6">
+                <Button
+                  onClick={() => setShowExternalModal(false)}
+                  variant="outline"
+                  className="flex-1 h-12 text-sm"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleAddExternalStudent}
+                  disabled={addingExternal || !externalStudent.roll_number || !externalStudent.batch_label}
+                  className="flex-1 h-12 bg-gradient-to-r from-purple-500 to-indigo-500 text-white hover:from-purple-600 hover:to-indigo-600 text-sm"
+                >
+                  {addingExternal ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Adding...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Add Student
+                    </>
+                  )}
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       <style>{`
         .custom-scrollbar::-webkit-scrollbar{width:8px;height:8px}
