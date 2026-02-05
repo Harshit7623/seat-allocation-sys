@@ -252,9 +252,16 @@ const buildCompleteMetadata = () => {
     const batch = batchGroups[batchLabel];
     if (!batch) return;
     
+    // Sort students by roll_number before preview
+    const sortedStudents = [...(batch.students || [])].sort((a, b) => {
+      const rollA = a.roll_number || a.enrollment || a.enrollment_no || '';
+      const rollB = b.roll_number || b.enrollment || b.enrollment_no || '';
+      return rollA.localeCompare(rollB);
+    });
+    
     setPreviewData({
       label: batchLabel,
-      students: batch.students || [],
+      students: sortedStudents,
       info: batch.info || {}
     });
   };

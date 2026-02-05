@@ -44,16 +44,38 @@ class CacheManager:
         return os.path.join(CACHE_DIR, f"{safe_id}.json")
 
     def _parse_enrollment(self, roll_no):
-        """Extract academic info from enrollment number"""
-        match = re.match(r"([A-Z]{2})([A-Z]{2})(\d{2})", str(roll_no))
+        """Extract academic info from enrollment number
+        
+        Supports two formats:
+        - New: 0901CD231067 (institution code + branch + year + roll)
+        - Old: BTCS241001 (degree + branch + year + roll)
+        """
+        roll_str = str(roll_no).strip()
+        
+        # Try new format first: 0901CD231067
+        # Pattern: 4 digits + 2-3 letters (branch) + 2 digits (year)
+        match = re.match(r"^\d{4}([A-Z]{2,3})(\d{2})", roll_str)
+        if match:
+            branch_code, year_short = match.groups()
+            return {
+                "degree": "B.Tech",  # Default for new format
+                "branch": branch_code,
+                "joining_year": f"20{year_short}"
+            }
+        
+        # Try old format: BTCS241001
+        # Pattern: 2 letters (degree) + 2-3 letters (branch) + 2 digits (year)
+        match = re.match(r"^([A-Z]{2})([A-Z]{2,3})(\d{2})", roll_str)
         if match:
             deg_code, branch_code, year_short = match.groups()
-            degree_map = {"BT": "B.Tech", "MT": "M.Tech", "BC": "B.C.A"}
+            degree_map = {"BT": "B.Tech", "MT": "M.Tech", "BC": "B.C.A", "MC": "M.C.A"}
             return {
                 "degree": degree_map.get(deg_code, deg_code),
                 "branch": branch_code,
                 "joining_year": f"20{year_short}"
             }
+        
+        # Fallback if no pattern matches
         return {"degree": "B.Tech", "branch": "N/A", "joining_year": "2024"}
 
     def save_or_update(self, plan_id, input_config, output_data, room_no="N/A"):

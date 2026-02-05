@@ -645,6 +645,11 @@ def export_attendance():
         
         logger.info(f"📋 Attendance request: plan={plan_id}, batch_or_room={batch_or_room}, room_no={room_no}")
         
+        # CRITICAL FIX: Add room_no to data so get_seating_data_hybrid can filter by room
+        if room_no:
+            data['room_no'] = room_no
+            data['room_name'] = room_no
+        
         # [STEP 1-3] Use Hybrid Seating Retrieval with ownership check
         seating_payload, source = get_seating_data_hybrid(data, user_id=request.user_id)
         
@@ -661,41 +666,72 @@ def export_attendance():
         all_students = []
         batch_info = {}
         
-        # Reconstruct students list from the matrix we got (hybrid result is normalized)
-        matrix = seating_payload.get('seating', [])
+        # Define target_room_name early to avoid undefined variable errors
         target_room_name = seating_payload.get('metadata', {}).get('room_no') or room_no
         
-        # If it was a room-level payload:
-        if isinstance(matrix, list) and len(matrix) > 0 and isinstance(matrix[0], list):
-            for row in matrix:
-                for seat in row:
-                    if seat and not seat.get('is_broken') and not seat.get('is_unallocated'):
-                        # If a specific batch was requested, filter by it
-                        if batch_or_room and batch_or_room != target_room_name:
-                             if seat.get('batch_label') == batch_or_room:
-                                 all_students.append(seat)
-                        else:
-                            all_students.append(seat)
-                            
-        # If no students found from matrix, try searching the 'batches' object if present
-        if not all_students and 'batches' in seating_payload:
+        # CRITICAL: Use batches structure directly from cache (room-wise data)
+        # Cache structure: rooms → batches → students
+        if 'batches' in seating_payload:
             batches = seating_payload.get('batches', {})
-            if batch_or_room in batches:
-                all_students = batches[batch_or_room].get('students', [])
-                batch_info = batches[batch_or_room].get('info', {})
-            elif room_no in batches: # Fallback
-                all_students = batches[room_no].get('students', [])
-                batch_info = batches[room_no].get('info', {})
-            else:
-                # Get all students if batch_or_room matches room
+            
+            # Case 1: Specific batch requested (e.g., "CSD-24")
+            if batch_or_room and batch_or_room in batches:
+                logger.info(f"📋 Extracting students for batch: {batch_or_room}")
+                batch_data = batches[batch_or_room]
+                all_students = batch_data.get('students', [])
+                batch_info = batch_data.get('info', {})
+                
+            # Case 2: Room-level request (e.g., "105B") - get all batches in room
+            elif batch_or_room:
+                logger.info(f"📋 Extracting students for room: {batch_or_room} (all batches)")
                 for b_name, b_data in batches.items():
                     all_students.extend(b_data.get('students', []))
-                    if not batch_info: batch_info = b_data.get('info', {})
+                    # Use first batch's info as default for room-level
+                    if not batch_info:
+                        batch_info = b_data.get('info', {})
+                        
+            # Case 3: No specific batch/room - get all students
+            else:
+                logger.info(f"📋 Extracting all students from cache")
+                for b_name, b_data in batches.items():
+                    all_students.extend(b_data.get('students', []))
+                    if not batch_info:
+                        batch_info = b_data.get('info', {})
+        
+        # Fallback: Try extracting from matrix if batches not available
+        elif 'seating' in seating_payload:
+            logger.warning(f"⚠️ Batches not found in cache, falling back to matrix extraction")
+            matrix = seating_payload.get('seating', [])
+            
+            if isinstance(matrix, list) and len(matrix) > 0 and isinstance(matrix[0], list):
+                for row in matrix:
+                    for seat in row:
+                        if seat and not seat.get('is_broken') and not seat.get('is_unallocated'):
+                            # If specific batch requested, filter by batch_label
+                            if batch_or_room and batch_or_room != target_room_name:
+                                if seat.get('batch_label') == batch_or_room:
+                                    all_students.append(seat)
+                            else:
+                                all_students.append(seat)
+
+        
+        # Deduplicate students based on roll_number
+        seen_rolls = set()
+        unique_students = []
+        for student in all_students:
+            roll = student.get('roll_number')
+            if roll and roll not in seen_rolls:
+                seen_rolls.add(roll)
+                unique_students.append(student)
+        all_students = unique_students
+        
+        # Sort students by roll number
+        all_students.sort(key=lambda s: s.get('roll_number', ''))
         
         if not all_students:
             return jsonify({
                 "error": f"No students found for '{batch_or_room}'",
-                "available_rooms": list(rooms.keys())
+                "available_rooms": list(seating_payload.get('rooms', {}).keys()) if 'rooms' in seating_payload else []
             }), 404
         
         # Map metadata to EXACT field names that create_attendance_pdf expects
