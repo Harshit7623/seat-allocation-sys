@@ -8,6 +8,7 @@ import {
   Trash2, Flame, UserCheck, Undo2, BarChart3,
   ArrowRight, AlertTriangle, Info, X, ShieldCheck, XCircle, LogOut
 } from 'lucide-react';
+import OptimizationConfigModal from '../components/OptimizationConfigModal';
 
 const Card = ({ className, children, ref }) => <div ref={ref} className={`glass-card ${className}`}>{children}</div>;
 
@@ -105,6 +106,9 @@ const AllocationPage = ({ showToast }) => {
   // Layout options
   const [batchByColumn, setBatchByColumn] = useState(true);
   const [randomizeColumn, setRandomizeColumn] = useState(false);
+  const [optimizeRoom, setOptimizeRoom] = useState(false);
+  const [isOptModalOpen, setIsOptModalOpen] = useState(false);
+  const [batchSuccessors, setBatchSuccessors] = useState({});
 
   // Batch selection for this room
   const [numBatchesToAllocate, setNumBatchesToAllocate] = useState(1);
@@ -290,33 +294,63 @@ const AllocationPage = ({ showToast }) => {
       throw new Error('No batches selected');
     }
 
-    // Build batch data ONLY for selected batches
+    // Include any Successor batches that aren't explicitly selected
+    // This allows chaining to external batches (e.g., Overflow -> Batch X)
+    const successorIds = Object.values(batchSuccessors).filter(id => id !== null);
+    const extraBatchIds = successorIds.filter(id => !validBatchIds.includes(id));
+    
+    // Find these extra batches in uploadedBatches
+    const extraBatchesData = uploadedBatches.filter(b => extraBatchIds.includes(b.batch_id));
+    
+    // Merge for payload (but NOT for UI state)
+    const allPayloadBatches = [...selectedBatchesData, ...extraBatchesData];
+
+    // Build batch data
     const batchCounts = {};
     const batchLabels = {};
     const batchColors = {};
 
-    selectedBatchesData.forEach((batch, idx) => {
+    // Map Real Batch IDs to 1-based Indices for the algorithm
+    const idToIndexMap = {};
+    allPayloadBatches.forEach((b, i) => {
+       idToIndexMap[b.batch_id] = i + 1;
+    });
+    
+    // Populate counts/labels/colors using the Index
+    allPayloadBatches.forEach((batch, idx) => {
       const batchIndex = idx + 1;
       batchCounts[batchIndex] = batch.student_count || 0;
       batchLabels[batchIndex] = batch.batch_name;
       batchColors[batchIndex] = batch.batch_color || '#3b82f6';
     });
+    
+    // Transform successors to use Indices (Algorithm expects 1..N)
+    const payloadSuccessors = {};
+    Object.entries(batchSuccessors).forEach(([fromId, toId]) => {
+        // Ensure both IDs are valid (exist in our payload list)
+        // Note: fromId is a string key, toId is number
+        const fId = parseInt(fromId, 10);
+        if (toId && idToIndexMap[fId] && idToIndexMap[toId]) {
+            payloadSuccessors[idToIndexMap[fId]] = idToIndexMap[toId];
+        }
+    });
 
-    console.log('📤 Payload - Selected batches:', selectedBatchesData.map(b => b.batch_name));
-    console.log('📤 Batch counts:', batchCounts);
-    console.log('📤 Batch colors:', batchColors);
+    console.log('📤 Payload - All batches:', allPayloadBatches.map(b => b.batch_name));
+    console.log('📤 Mapped Successors:', payloadSuccessors);
 
     return {
       session_id: session?.session_id,
       plan_id: session?.plan_id,
-      room_no: selectedRoomName, // <--- ADD THIS LINE
+      room_no: selectedRoomName, 
       rows,
       cols,
       block_width: blockWidth,
       broken_seats: parseBrokenSeats(),
-      num_batches: selectedBatchesData.length,
+      num_batches: allPayloadBatches.length, // Includes extras
       batch_by_column: batchByColumn,
       randomize_column: randomizeColumn,
+      optimize_stgy: optimizeRoom,
+      batch_successors: payloadSuccessors, // <--- TRANSORMED
       use_demo_db: true,
       batch_student_counts: batchCounts,
       batch_labels: batchLabels,
@@ -697,6 +731,15 @@ if (initializing) {
     );
   }
 
+  const validBatchIds = selectedBatchIds.filter(id => id !== null);
+  const selectedBatchesForModal = uploadedBatches
+    .filter(b => validBatchIds.includes(b.batch_id))
+    .map(b => ({
+      id: b.batch_id,
+      label: b.batch_name,
+      color: b.batch_color || '#3b82f6'
+    }));
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#050505] py-8 px-4 transition-colors duration-300">
       <div className="max-w-[1600px] mx-auto space-y-8">
@@ -980,6 +1023,30 @@ if (initializing) {
                   <RefreshCw size={16} className="text-orange-500" />
                   Randomize Within Column
                 </label>
+                <label className="flex items-center gap-3 text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer hover:text-orange-600 dark:hover:text-orange-400 transition-colors">
+                  <input 
+                    type="checkbox" 
+                    checked={optimizeRoom} 
+                    onChange={e => setOptimizeRoom(e.target.checked)} 
+                    className="w-5 h-5 rounded border-2 border-gray-300 text-orange-600 focus:ring-2 focus:ring-orange-500"
+                  />
+                  <div className="flex items-center gap-2">
+                    <BarChart3 size={16} className="text-orange-500" />
+                    <span>Optimize Room</span>
+                    <span className="text-[10px] uppercase font-black bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded">
+                      New
+                    </span>
+                  </div>
+                </label>
+                {/* Config Button (Only show if optimized enabled) */}
+                {optimizeRoom && (
+                  <button
+                    onClick={() => setIsOptModalOpen(true)}
+                    className="ml-auto text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                  >
+                    Configure Chain
+                  </button>
+                )}
               </div>
 
               <div className="pt-4 border-t-2 border-gray-200 dark:border-gray-800">
@@ -1221,6 +1288,17 @@ if (initializing) {
         .dark .custom-scrollbar::-webkit-scrollbar-thumb{background:#4b5563}
         .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover{background:#6b7280}
       `}</style>
+      <OptimizationConfigModal
+        isOpen={isOptModalOpen}
+        onClose={() => setIsOptModalOpen(false)}
+        selectedBatches={selectedBatchesForModal}
+        allBatches={uploadedBatches} // <--- Pass all batches
+        onSaveSuccessors={(successors) => {
+          setBatchSuccessors(successors);
+          showToast('success', 'Optimization chain saved!');
+        }}
+        initialSuccessors={batchSuccessors}
+      />
     </div>
   );
 };

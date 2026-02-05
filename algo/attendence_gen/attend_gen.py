@@ -99,6 +99,9 @@ def create_attendance_pdf(filename, student_list, batch_label, metadata, extract
     table_headers = ["S. No.", "Name of the Student", "Enrolment No.", "Set A/ Set B", "Answer Booklet No.", "Signature"]
     data = [table_headers]
 
+    # Defensive: Ensure students are sorted by roll number
+    student_list = sorted(student_list, key=lambda s: s.get('roll_number', ''))
+
     for i, student in enumerate(student_list):
         data.append([
             str(i + 1),

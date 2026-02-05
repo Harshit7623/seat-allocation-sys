@@ -98,10 +98,16 @@ def process_seating_data(json_data):
                 content = f"{roll}\nSET {pset}" if roll else ''
                 bg = seat.get('color')
                 
+                
                 if roll:
-                    summary['total_allocated'] += 1
-                    label = seat.get('batch_label') or f"Batch {seat.get('batch', 'Unknown')}"
-                    summary['batch_counts'][label] = summary['batch_counts'].get(label, 0) + 1
+                    # Filter out invalid roll numbers that might be present in data
+                    roll_str = str(roll).strip().upper()
+                    invalid_values = {'BROKEN', 'NONE', 'NULL', 'UNUSED', 'N/A', 'VOID'}
+                    
+                    if roll_str not in invalid_values:
+                        summary['total_allocated'] += 1
+                        label = seat.get('batch_label') or f"Batch {seat.get('batch', 'Unknown')}"
+                        summary['batch_counts'][label] = summary['batch_counts'].get(label, 0) + 1
                 
             matrix[r][c] = {'text': content, 'bg': bg}
     return matrix, summary
