@@ -225,17 +225,44 @@ def create_seating_pdf(filename="algo/pdf_gen/seat_plan_generated/seating_plan.p
     num_cols = metadata.get('cols', 0) or (len(seating_matrix[0]) if seating_matrix else 0)
     num_rows = metadata.get('rows', 0) or len(seating_matrix)
     
-    # ✅ FIX 1: Get block_width and CALCULATE num_blocks properly
-    block_width = metadata.get('block_width', 2)  # Default to 2 if not specified
+    # ✅ Support variable block widths via block_structure
+    block_structure = metadata.get('block_structure')  # e.g., [3, 2, 3, 2]
+    block_width = metadata.get('block_width', 2)  # Default fallback
     
-    # ✅ FIX 2: Calculate num_blocks from block_width and num_cols
-    if block_width and block_width > 0 and num_cols > 0:
+    # Build aisle_positions: columns AFTER which an aisle appears (0-indexed)
+    aisle_after_cols = []
+    if block_structure and isinstance(block_structure, list) and len(block_structure) > 0:
+        # Variable block widths: calculate cumulative positions
+        import math
+        cumulative = 0
+        for i, width in enumerate(block_structure[:-1]):  # All but last block
+            cumulative += width
+            aisle_after_cols.append(cumulative - 1)  # 0-indexed column
+        num_blocks = len(block_structure)
+        # Build block ranges for headers/styling: [(start, end), ...]
+        block_ranges = []
+        col_start = 0
+        for width in block_structure:
+            col_end = min(col_start + width - 1, num_cols - 1)
+            if col_start < num_cols:
+                block_ranges.append((col_start, col_end))
+            col_start += width
+    elif block_width and block_width > 0 and num_cols > 0:
+        # Uniform block_width: calculate standard aisle positions
         import math
         num_blocks = math.ceil(num_cols / block_width)
+        block_ranges = []
+        for i in range(num_blocks):
+            start = i * block_width
+            end = min((i + 1) * block_width - 1, num_cols - 1)
+            block_ranges.append((start, end))
+            if end < num_cols - 1:  # Not the last column
+                aisle_after_cols.append(end)
     else:
         num_blocks = metadata.get('blocks', 1)
+        block_ranges = [(0, num_cols - 1)]
     
-    print(f"📊 PDF Generation - Cols: {num_cols}, Block Width: {block_width}, Num Blocks: {num_blocks}")
+    print(f"📊 PDF Generation - Cols: {num_cols}, Block Structure: {block_structure}, Num Blocks: {num_blocks}")
 
     doc = SimpleDocTemplate(
         filename,
@@ -312,28 +339,20 @@ def create_seating_pdf(filename="algo/pdf_gen/seat_plan_generated/seating_plan.p
         table_content = []
         style_cmds = []
 
-        # ✅ FIX 3: Create block header row with proper calculation
+        # ✅ Create block header row using block_ranges
         block_header_row = [''] * num_cols
-        col_index = 0
-        for block_idx in range(num_blocks):
-            start_col = col_index
-            end_col = min(col_index + block_width, num_cols)
+        for block_idx, (start_col, end_col) in enumerate(block_ranges):
             if start_col < num_cols:
                 block_header_row[start_col] = Paragraph(f"<b>Block {block_idx + 1}</b>", header_style)
-            col_index = end_col
 
         table_content.append(block_header_row)
 
-        # ✅ FIX 4: Add SPAN and background for block headers
-        col_index = 0
-        for block_idx in range(num_blocks):
-            start_col = col_index
-            end_col = min(col_index + block_width, num_cols) - 1
+        # ✅ Add SPAN and background for block headers using block_ranges
+        for block_idx, (start_col, end_col) in enumerate(block_ranges):
             if start_col <= end_col and start_col < num_cols:
                 style_cmds.append(('SPAN', (start_col, 0), (end_col, 0)))
                 style_cmds.append(('BACKGROUND', (start_col, 0), (end_col, 0), colors.HexColor("#D0D0D0")))
                 style_cmds.append(('BOX', (start_col, 0), (end_col, 0), 2.5, colors.black))
-            col_index = end_col + 1
 
         # Add seating data rows
         for row in seating_matrix:
@@ -355,22 +374,16 @@ def create_seating_pdf(filename="algo/pdf_gen/seat_plan_generated/seating_plan.p
             ('BOTTOMPADDING', (0, 1), (-1, -1), 7),
         ])
 
-        # ✅ FIX 5: Add THICK BORDERS between blocks (visual separation)
-        if num_blocks > 1 and block_width > 0:
-            col_index = 0
-            for block_idx in range(num_blocks):
-                start_col = col_index
-                end_col = min(col_index + block_width, num_cols) - 1
-                
+        # ✅ Add THICK BORDERS between blocks (visual separation) using block_ranges
+        if num_blocks > 1:
+            for block_idx, (start_col, end_col) in enumerate(block_ranges):
                 if start_col < num_cols:
-                    # Left border of block (thick)
+                    # Left border of block (thick) - except for first block
                     if start_col > 0:
                         style_cmds.append(('LINEAFTER', (start_col - 1, 0), (start_col - 1, -1), 3.0, colors.black))
                     
                     # Box around entire block
                     style_cmds.append(('BOX', (start_col, 0), (end_col, -1), 2.5, colors.black))
-                
-                col_index = end_col + 1
             
             # Outer box for the entire table
             style_cmds.append(('BOX', (0, 0), (-1, -1), 3.0, colors.black))

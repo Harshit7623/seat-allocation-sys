@@ -9,6 +9,65 @@ from algo.auth_service import token_required
 
 classrooms_bp = Blueprint('classrooms', __name__, url_prefix='/api/classrooms')
 
+
+def auto_convert_block_structure(classroom: dict) -> dict:
+    """
+    Auto-convert block_width to block_structure on read if block_structure is null.
+    This ensures backwards compatibility with existing classrooms.
+    
+    Example: block_width=3, cols=9 → block_structure=[3,3,3]
+             block_width=2, cols=5 → block_structure=[2,2,1]
+    """
+    result = dict(classroom)
+    cols = result.get('cols', 1)
+    block_structure_raw = result.get('block_structure')
+    
+    # Parse existing block_structure if it's a JSON string
+    if block_structure_raw:
+        if isinstance(block_structure_raw, str):
+            try:
+                result['block_structure'] = json.loads(block_structure_raw)
+            except json.JSONDecodeError:
+                result['block_structure'] = None
+        elif isinstance(block_structure_raw, list):
+            result['block_structure'] = block_structure_raw
+    
+    # Auto-generate from block_width if not set
+    if not result.get('block_structure'):
+        block_width = result.get('block_width', 2)
+        structure = []
+        remaining = cols
+        while remaining > 0:
+            width = min(block_width, remaining)
+            structure.append(width)
+            remaining -= width
+        result['block_structure'] = structure
+    
+    return result
+
+
+def validate_block_structure(block_structure: list, cols: int) -> tuple:
+    """
+    Validate that block_structure is valid and sums to cols.
+    Returns (is_valid, error_message)
+    """
+    if not isinstance(block_structure, list):
+        return False, "block_structure must be an array"
+    
+    if len(block_structure) == 0:
+        return False, "block_structure cannot be empty"
+    
+    for i, width in enumerate(block_structure):
+        if not isinstance(width, int) or width < 1:
+            return False, f"Block {i+1} width must be a positive integer"
+    
+    total = sum(block_structure)
+    if total != cols:
+        return False, f"Block widths sum to {total}, but classroom has {cols} columns"
+    
+    return True, None
+
+
 @classrooms_bp.route('', methods=['GET'])
 @token_required
 def get_classrooms():
@@ -21,7 +80,8 @@ def get_classrooms():
         cur.execute("SELECT * FROM classrooms ORDER BY name ASC")
         rows = cur.fetchall()
         
-        classrooms = [dict(row) for row in rows]
+        # Apply auto-conversion for each classroom
+        classrooms = [auto_convert_block_structure(dict(row)) for row in rows]
         conn.close()
         
         # Return array directly (legacy compatible)
@@ -52,11 +112,25 @@ def add_classroom():
              broken_str = json.dumps(broken)
         else:
              broken_str = str(broken)
+        
+        # Handle block_structure
+        block_structure = data.get('block_structure')
+        block_structure_str = None
+        block_width = data.get('block_width', 2)
+        
+        if block_structure:
+            # Validate block_structure
+            is_valid, error_msg = validate_block_structure(block_structure, cols)
+            if not is_valid:
+                return jsonify({"status": "error", "message": error_msg}), 400
+            block_structure_str = json.dumps(block_structure)
+            # Use first block's width as the legacy block_width
+            block_width = block_structure[0] if block_structure else 2
              
         cur.execute("""
-            INSERT INTO classrooms (name, rows, cols, broken_seats, block_width)
-            VALUES (?, ?, ?, ?, ?)
-        """, (name, rows, cols, broken_str, data.get('block_width', 2)))
+            INSERT INTO classrooms (name, rows, cols, broken_seats, block_width, block_structure)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (name, rows, cols, broken_str, block_width, block_structure_str))
         
         cid = cur.lastrowid
         conn.commit()
@@ -89,7 +163,18 @@ def update_classroom(room_id):
     data = request.json
     try:
          conn = get_db_connection()
+         conn.row_factory = sqlite3.Row
          cur = conn.cursor()
+         
+         # Get current classroom to know cols for validation
+         cur.execute("SELECT cols FROM classrooms WHERE id = ?", (room_id,))
+         existing = cur.fetchone()
+         if not existing:
+             conn.close()
+             return jsonify({"status": "error", "message": "Classroom not found"}), 404
+         
+         # Use new cols value if provided, otherwise use existing
+         target_cols = data.get('cols', existing['cols'])
          
          # Fields to update
          fields = []
@@ -112,6 +197,25 @@ def update_classroom(room_id):
          if 'block_width' in data:
              fields.append("block_width = ?")
              values.append(data['block_width'])
+         
+         # Handle block_structure
+         if 'block_structure' in data:
+             block_structure = data['block_structure']
+             if block_structure:
+                 is_valid, error_msg = validate_block_structure(block_structure, target_cols)
+                 if not is_valid:
+                     conn.close()
+                     return jsonify({"status": "error", "message": error_msg}), 400
+                 fields.append("block_structure = ?")
+                 values.append(json.dumps(block_structure))
+                 # Also update legacy block_width to first block's width
+                 if 'block_width' not in data:
+                     fields.append("block_width = ?")
+                     values.append(block_structure[0])
+             else:
+                 # Setting to null clears the custom structure
+                 fields.append("block_structure = ?")
+                 values.append(None)
              
          values.append(room_id)
          

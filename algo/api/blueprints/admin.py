@@ -2,7 +2,7 @@
 # Handles user login/signup and provides utilities for bulk database table operations.
 from flask import Blueprint, jsonify, request, send_file, current_app
 from algo.database.db import get_db_connection
-from algo.auth_service import token_required, login as auth_login, signup as auth_signup, google_auth_handler, get_user_by_token, get_user_by_id
+from algo.auth_service import token_required, login as auth_login, signup as auth_signup, google_auth_handler, get_user_by_token, get_user_by_id, update_user_profile
 import sqlite3
 
 # Helper for optional rate limiting
@@ -75,6 +75,42 @@ def profile():
         return jsonify({
             "status": "error", 
             "message": f"Profile retrieval failed: {str(e)}"
+        }), 500
+
+@auth_bp.route('/profile', methods=['PUT'])
+@token_required
+def update_profile():
+    """Update current user profile"""
+    try:
+        user_id = getattr(request, 'user_id', None)
+        if not user_id:
+            return jsonify({
+                "status": "error",
+                "message": "Auth context missing"
+            }), 401
+
+        data = request.get_json()
+        username = data.get('username')
+        email = data.get('email')
+
+        success, message = update_user_profile(user_id, username, email)
+        
+        if success:
+            # Fetch updated user data
+            user = get_user_by_id(user_id)
+            return jsonify({
+                "status": "success",
+                "message": message,
+                "user": user
+            })
+        return jsonify({
+            "status": "error",
+            "message": message
+        }), 400
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Profile update failed: {str(e)}"
         }), 500
 
 @auth_bp.route('/google', methods=['POST'])

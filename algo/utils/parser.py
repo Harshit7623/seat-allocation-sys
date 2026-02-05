@@ -19,18 +19,21 @@ logger.setLevel(logging.INFO)
 
 # ============================================================================
 # COLOR PALETTE FOR BATCH GENERATION
+# High-contrast, easily distinguishable light colors
 # ============================================================================
 BATCH_COLORS = [
-    '#BFDBFE',  # Blue
-    '#FECACA',  # Red
-    '#BBF7D0',  # Green
-    '#FDE68A',  # Amber
-    '#E9D5FF',  # Purple
-    '#FBCFE8',  # Pink
-    '#A5F3FC',  # Cyan
-    '#FED7AA',  # Orange
-    '#99F6E4',  # Teal
-    '#DDD6FE',  # Violet
+    '#93C5FD',  # Blue (distinct)
+    '#FCA5A5',  # Red (distinct)
+    '#86EFAC',  # Green (distinct)
+    '#FCD34D',  # Amber/Yellow (warm)
+    '#C4B5FD',  # Purple (distinct)
+    '#F9A8D4',  # Pink (distinct)
+    '#67E8F9',  # Cyan (cool)
+    '#FDBA74',  # Orange (warm, distinct from amber)
+    '#5EEAD4',  # Teal (cool, distinct from cyan)
+    '#A78BFA',  # Violet (deeper, distinct from purple)
+    '#FEF08A',  # Light Yellow (bright)
+    '#6EE7B7',  # Emerald (distinct from green)
 ]
 
 def _norm_col_name(x: Any) -> str:
@@ -52,6 +55,17 @@ def _normalize_enrollment_value(v: Any) -> str:
 def _generate_batch_color() -> str:
     """Generate a random batch color from predefined palette."""
     return random.choice(BATCH_COLORS)
+
+
+def _get_color_for_batch_name(batch_name: str) -> str:
+    """
+    Generate a deterministic color based on batch name.
+    Different batch names will get different colors (hash-based).
+    """
+    # Use hash of batch name to pick color index
+    hash_value = hash(batch_name.strip().upper())
+    color_index = abs(hash_value) % len(BATCH_COLORS)
+    return BATCH_COLORS[color_index]
 
 # ============================================================================
 # PARSE RESULT DATACLASS (ENHANCED)
@@ -568,9 +582,9 @@ class StudentDataParser:
         rows_total = len(df)
         logger.info(f"Read {rows_total} rows from {source_filename or 'uploaded file'}")
         
-        # Generate color if not provided
+        # Generate color based on batch name (deterministic - same name = same color)
         if batch_color is None:
-            batch_color = _generate_batch_color()
+            batch_color = _get_color_for_batch_name(batch_name)
         
         warnings: List[Dict] = []
 

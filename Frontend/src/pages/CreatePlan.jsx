@@ -422,7 +422,7 @@ const CreatePlan = ({ showToast }) => {
               onClick={action.onClick}
               onMouseEnter={() => setHoveredCard(index)}
               onMouseLeave={() => setHoveredCard(null)}
-              className={`glass-card relative overflow-hidden p-8 border-2 border-gray-200 dark:border-gray-800 ${action.hoverBorder} hover:shadow-2xl transition-all duration-300 group rounded-2xl`}
+              className={`glass-card relative overflow-hidden p-8 border-2 border-gray-200 dark:border-gray-800 ${action.hoverBorder} transition-all duration-300 group rounded-2xl`}
               style={{
                 opacity: 0,
                 animation: `fadeInUp 0.5s ease-out ${index * 0.1}s forwards`
@@ -533,7 +533,7 @@ const CreatePlan = ({ showToast }) => {
                     key={plan.session_id || idx}
                     onMouseEnter={() => setHoveredPlan(idx)}
                     onMouseLeave={() => setHoveredPlan(null)}
-                    className="group p-5 rounded-xl bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750 transition-all duration-300 border-2 border-gray-200 dark:border-gray-700 hover:border-orange-500 dark:hover:border-orange-400 shadow-sm hover:shadow-lg"
+                    className="group p-5 rounded-xl bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750 transition-all duration-300 border-2 border-gray-200 dark:border-gray-700 hover:border-orange-500 dark:hover:border-orange-400 shadow-sm"
                     style={{
                       opacity: 0,
                       animation: `fadeIn 0.3s ease-out ${idx * 0.05}s forwards`
@@ -874,14 +874,7 @@ const CreatePlan = ({ showToast }) => {
           to { opacity: 1; }
         }
 
-        .glass-card {
-          background: rgba(255, 255, 255, 0.9);
-          backdrop-filter: blur(10px);
-        }
-
-        .dark .glass-card {
-          background: rgba(17, 24, 39, 0.9);
-        }
+        
       `}</style>
     </div>
   );

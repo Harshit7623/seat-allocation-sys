@@ -1,8 +1,8 @@
 // frontend/src/pages/ClassroomPage.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import SplitText from '../components/SplitText';
 import { motion } from "framer-motion";
-import { Plus, Save, Trash2, LayoutGrid, AlertCircle, Monitor, X, CheckCircle2, Building } from "lucide-react";
+import { Plus, Save, Trash2, LayoutGrid, AlertCircle, Monitor, X, CheckCircle2, Building, Columns, Minus } from "lucide-react";
 
 // Styled Components
 const Card = ({ className, children }) => <div className={`glass-card ${className}`}>{children}</div>;
@@ -22,12 +22,12 @@ const Button = ({ className, variant = "primary", size = "default", children, on
 const Input = (props) => (
   <input 
     {...props} 
-    className={`flex h-10 w-full rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1 text-sm shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:text-white ${props.className}`} 
+    className={`flex h-10 w-full rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1 text-sm shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900 dark:text-white placeholder:text-gray-400 ${props.className}`} 
   />
 );
 
 const Label = ({ className, children }) => (
-  <label className={`text-xs uppercase font-bold tracking-widest text-gray-600 dark:text-gray-400 ${className}`}>
+  <label className={`text-xs uppercase font-bold tracking-widest text-gray-700 dark:text-gray-400 ${className}`}>
     {children}
   </label>
 );
@@ -45,8 +45,37 @@ export default function ClassroomPage({ showToast }) {
     rows: 8, 
     cols: 10, 
     broken_seats: '', 
-    block_width: 2
+    block_width: 2,
+    block_structure: null  // Variable block widths: [3, 2, 3, 2] etc.
   });
+  
+  // Use custom block structure mode
+  const [useCustomBlocks, setUseCustomBlocks] = useState(false);
+
+  // Compute effective block structure (for display)
+  const effectiveBlockStructure = useMemo(() => {
+    if (roomData.block_structure && Array.isArray(roomData.block_structure) && roomData.block_structure.length > 0) {
+      return roomData.block_structure;
+    }
+    // Auto-generate from block_width
+    const cols = roomData.cols || 1;
+    const blockWidth = roomData.block_width || 2;
+    const structure = [];
+    let remaining = cols;
+    while (remaining > 0) {
+      const width = Math.min(blockWidth, remaining);
+      structure.push(width);
+      remaining -= width;
+    }
+    return structure;
+  }, [roomData.block_structure, roomData.block_width, roomData.cols]);
+
+  // Validate block structure sums to cols
+  const blockStructureSum = useMemo(() => {
+    return effectiveBlockStructure.reduce((sum, w) => sum + w, 0);
+  }, [effectiveBlockStructure]);
+  
+  const isBlockStructureValid = blockStructureSum === roomData.cols;
 
   // Fetch classrooms
   const fetchClassrooms = async () => {
@@ -75,6 +104,8 @@ export default function ClassroomPage({ showToast }) {
   const handleSelectRoom = (room) => {
     setSelectedRoomId(room.id);
     setRoomData({ ...room }); 
+    // Check if this room has custom block structure
+    setUseCustomBlocks(room.block_structure && Array.isArray(room.block_structure) && room.block_structure.length > 0);
   };
 
   const handleCreateNew = () => {
@@ -85,8 +116,10 @@ export default function ClassroomPage({ showToast }) {
       rows: 8, 
       cols: 10, 
       broken_seats: '', 
-      block_width: 2 
+      block_width: 2,
+      block_structure: null
     });
+    setUseCustomBlocks(false);
   };
 
   const toggleSeat = (index) => {
@@ -120,6 +153,12 @@ export default function ClassroomPage({ showToast }) {
       return;
     }
 
+    // Validate block structure if using custom blocks
+    if (useCustomBlocks && !isBlockStructureValid) {
+      if (showToast) showToast(`Block widths sum to ${blockStructureSum}, but classroom has ${roomData.cols} columns`, "error");
+      return;
+    }
+
     setSaving(true);
     try {
       const token = localStorage.getItem('token');
@@ -129,7 +168,22 @@ export default function ClassroomPage({ showToast }) {
       const url = isEditing ? `/api/classrooms/${roomData.id}` : '/api/classrooms';
       const method = isEditing ? 'PUT' : 'POST';
       
-      console.log(`📤 ${method} ${url}`, roomData);
+      const payload = {
+        name: roomData.name,
+        rows: parseInt(roomData.rows),
+        cols: parseInt(roomData.cols),
+        block_width: parseInt(roomData.block_width) || 2,
+        broken_seats: roomData.broken_seats || ''
+      };
+      
+      // Include block_structure if using custom blocks
+      if (useCustomBlocks && roomData.block_structure) {
+        payload.block_structure = roomData.block_structure;
+      } else {
+        payload.block_structure = null; // Clear custom structure
+      }
+      
+      console.log(`📤 ${method} ${url}`, payload);
       
       const res = await fetch(url, {
         method: method,
@@ -137,13 +191,7 @@ export default function ClassroomPage({ showToast }) {
           'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` })
         },
-        body: JSON.stringify({
-          name: roomData.name,
-          rows: parseInt(roomData.rows),
-          cols: parseInt(roomData.cols),
-          block_width: parseInt(roomData.block_width) || 2,
-          broken_seats: roomData.broken_seats || ''
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await res.json();
@@ -197,10 +245,43 @@ export default function ClassroomPage({ showToast }) {
       
       fetchClassrooms();
       setSelectedRoomId(null);
-      setRoomData({ id: null, name: '', rows: 8, cols: 10, broken_seats: '', block_width: 2 });
+      setRoomData({ id: null, name: '', rows: 8, cols: 10, broken_seats: '', block_width: 2, block_structure: null });
+      setUseCustomBlocks(false);
     } catch (err) {
       if (showToast) showToast(err.message || "Delete failed", "error");
     }
+  };
+
+  // Block structure management functions
+  const initializeCustomBlocks = () => {
+    // Initialize with current effective structure
+    setRoomData({ ...roomData, block_structure: [...effectiveBlockStructure] });
+    setUseCustomBlocks(true);
+  };
+
+  const addBlock = () => {
+    const current = roomData.block_structure || [...effectiveBlockStructure];
+    setRoomData({ ...roomData, block_structure: [...current, 1] });
+  };
+
+  const removeBlock = (index) => {
+    const current = roomData.block_structure || [...effectiveBlockStructure];
+    if (current.length > 1) {
+      const newStructure = current.filter((_, i) => i !== index);
+      setRoomData({ ...roomData, block_structure: newStructure });
+    }
+  };
+
+  const updateBlockWidth = (index, newWidth) => {
+    const current = roomData.block_structure || [...effectiveBlockStructure];
+    const newStructure = [...current];
+    newStructure[index] = Math.max(1, parseInt(newWidth) || 1);
+    setRoomData({ ...roomData, block_structure: newStructure });
+  };
+
+  const resetToUniform = () => {
+    setUseCustomBlocks(false);
+    setRoomData({ ...roomData, block_structure: null });
   };
 
   const brokenSeatsList = roomData.broken_seats ? roomData.broken_seats.split(',').map(s => s.trim()).filter(Boolean) : [];
@@ -274,7 +355,7 @@ export default function ClassroomPage({ showToast }) {
                     className={`w-full text-left p-4 rounded-xl transition-all duration-200 border-2 group ${
                       selectedRoomId === room.id 
                         ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20 shadow-lg" 
-                        : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-orange-500 dark:hover:border-orange-400 hover:shadow-md"
+                        : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-orange-500 dark:hover:border-orange-400"
                     }`}
                   >
                     <div className="flex justify-between items-center mb-2">
@@ -353,22 +434,103 @@ export default function ClassroomPage({ showToast }) {
                           onChange={e => setRoomData({...roomData, cols: Math.max(1, Math.min(50, parseInt(e.target.value, 10) || 1))})} 
                         />
                       </div>
-                      <div className="space-y-2">
-                        <Label>Block Width</Label>
-                        <Input 
-                          type="number" 
-                          value={roomData.block_width} 
-                          onChange={e => setRoomData({...roomData, block_width: Math.max(1, parseInt(e.target.value, 10) || 1)})} 
-                        />
-                      </div>
                     </div>
+                    
+                    {/* Block Structure Editor */}
+                    <div className="space-y-3 p-4 bg-white/50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <Label className="flex items-center gap-1">
+                          <Columns size={12} className="text-orange-500" />
+                          Block Structure
+                        </Label>
+                        {!useCustomBlocks ? (
+                          <button
+                            onClick={initializeCustomBlocks}
+                            className="text-xs font-bold text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 transition-colors"
+                          >
+                            Customize Blocks
+                          </button>
+                        ) : (
+                          <button
+                            onClick={resetToUniform}
+                            className="text-xs font-bold text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                          >
+                            Reset to Uniform
+                          </button>
+                        )}
+                      </div>
+                      
+                      {!useCustomBlocks ? (
+                        <div className="flex items-center gap-3">
+                          <div className="space-y-1 flex-1">
+                            <div className="text-xs text-gray-500 dark:text-gray-400">Uniform Width</div>
+                            <Input 
+                              type="number" 
+                              value={roomData.block_width} 
+                              onChange={e => setRoomData({...roomData, block_width: Math.max(1, parseInt(e.target.value, 10) || 1)})} 
+                            />
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
+                            = {effectiveBlockStructure.length} blocks
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap gap-2 items-center">
+                            {(roomData.block_structure || effectiveBlockStructure).map((width, idx) => (
+                              <div key={idx} className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg px-2 py-1">
+                                <span className="text-xs text-gray-500 dark:text-gray-400">B{idx + 1}:</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={width}
+                                  onChange={e => updateBlockWidth(idx, e.target.value)}
+                                  className="w-12 h-7 text-center text-sm font-mono bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded focus:ring-1 focus:ring-orange-500 focus:border-orange-500"
+                                />
+                                {(roomData.block_structure || effectiveBlockStructure).length > 1 && (
+                                  <button
+                                    onClick={() => removeBlock(idx)}
+                                    className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                                    title="Remove block"
+                                  >
+                                    <Minus size={12} />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                            <button
+                              onClick={addBlock}
+                              className="flex items-center gap-1 px-2 py-1 text-xs font-bold text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
+                            >
+                              <Plus size={12} /> Add
+                            </button>
+                          </div>
+                          
+                          {/* Validation Status */}
+                          <div className={`text-xs flex items-center gap-1 ${isBlockStructureValid ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {isBlockStructureValid ? (
+                              <>
+                                <CheckCircle2 size={12} />
+                                <span>Sum: {blockStructureSum} = {roomData.cols} columns ✓</span>
+                              </>
+                            ) : (
+                              <>
+                                <AlertCircle size={12} />
+                                <span>Sum: {blockStructureSum} ≠ {roomData.cols} columns (adjust widths)</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
                     <div className="flex gap-2 justify-end">
                       {roomData.id && (
                         <Button variant="destructive" onClick={handleDelete} title="Delete Room">
                           <Trash2 className="h-4 w-4 mr-2" /> Delete
                         </Button>
                       )}
-                      <Button onClick={handleSave} disabled={saving}>
+                      <Button onClick={handleSave} disabled={saving || (useCustomBlocks && !isBlockStructureValid)}>
                         {saving ? (
                           <>
                             <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
@@ -416,7 +578,7 @@ export default function ClassroomPage({ showToast }) {
                             className={`h-12 w-12 rounded-xl flex items-center justify-center text-xs font-bold transition-all duration-200 border-2 shadow-sm ${
                               isBroken 
                                 ? "bg-red-50 dark:bg-red-900/20 border-red-500 dark:border-red-600 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 shadow-red-500/20" 
-                                : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-600 hover:border-orange-500 dark:hover:border-orange-400 hover:text-orange-500 hover:-translate-y-1 hover:shadow-lg"
+                                : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-600 hover:border-orange-500 dark:hover:border-orange-400 hover:text-orange-500 hover:-translate-y-1"
                             }`}
                             title={`Row ${r}, Col ${c}${isBroken ? ' (Broken)' : ''}`}
                           >

@@ -456,7 +456,7 @@ const buildCompleteMetadata = () => {
           <button
             onClick={handleDownloadRoom}
             disabled={actionLoading === 'room' || !metadata.course_name || !metadata.course_code}
-            className="w-full py-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-2xl font-black uppercase tracking-widest text-sm flex items-center justify-center gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+            className="w-full py-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-2xl font-black uppercase tracking-widest text-sm flex items-center justify-center gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
           >
             {actionLoading === 'room' ? (
               <Loader2 className="animate-spin" size={20}/>
@@ -480,7 +480,7 @@ const buildCompleteMetadata = () => {
                   <motion.div 
                     key={label}
                     whileHover={{ y: -5 }}
-                    className="bg-white dark:bg-gray-800 rounded-3xl border-2 border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm hover:shadow-xl transition-all"
+                    className="bg-white dark:bg-gray-800 rounded-3xl border-2 border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm transition-all"
                   >
                     <div className="p-6">
                       <div className="flex justify-between items-start mb-4">

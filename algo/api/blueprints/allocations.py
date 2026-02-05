@@ -217,6 +217,7 @@ def generate_seating():
             'rows': int(data.get("rows", 10)),
             'cols': int(data.get("cols", 6)),
             'block_width': int(data.get("block_width", 2)),
+            'block_structure': data.get("block_structure"),  # Variable block widths
             'broken_seats': broken_seats
         }
 
@@ -252,6 +253,7 @@ def generate_seating():
             cols=int(data.get("cols", 6)),
             num_batches=num_batches,
             block_width=int(data.get("block_width", 2)),
+            block_structure=data.get("block_structure"),  # Variable block widths
             batch_by_column=bool(data.get("batch_by_column", True)),
             randomize_column=bool(data.get("randomize_column", False)),
             broken_seats=broken_seats,
@@ -400,6 +402,7 @@ def manual_generate_seating():
             cols=int(data.get("cols", 10)),
             num_batches=num_batches,
             block_width=int(data.get("block_width", 3)),
+            block_structure=data.get("block_structure"),  # Variable block widths
             batch_by_column=bool(data.get("batch_by_column", True)),
             randomize_column=bool(data.get("randomize_column", False)),
             broken_seats=broken_seats,
@@ -449,6 +452,7 @@ def constraints_status():
             cols=int(data.get("cols", 6)),
             num_batches=int(data.get("num_batches", 3)),
             block_width=int(data.get("block_width", 2)),
+            block_structure=data.get("block_structure"),  # Variable block widths
             batch_by_column=bool(data.get("batch_by_column", True)),
             randomize_column=bool(data.get("randomize_column", False))
         )
@@ -497,3 +501,411 @@ def reset_allocation():
 @token_required
 def get_allocations():
     return jsonify({"status": "success", "allocations": []})
+
+
+# ============================================================================
+# EXTERNAL STUDENT MANAGEMENT (Manual additions to empty seats)
+# ============================================================================
+
+@allocation_bp.route('/sessions/<int:session_id>/rooms/<room_no>/add-external-student', methods=['POST'])
+@token_required
+def add_external_student(session_id, room_no):
+    """
+    Add an external student to an empty seat in a finalized seating plan.
+    This allows filling unused seats with students not in the original upload.
+    """
+    try:
+        data = request.get_json(force=True)
+        
+        # Required fields
+        seat_position = data.get('seat_position')  # e.g., "A1", "B3"
+        seat_row = data.get('seat_row')  # 0-indexed
+        seat_col = data.get('seat_col')  # 0-indexed
+        roll_number = data.get('roll_number')
+        batch_label = data.get('batch_label')
+        
+        # Optional fields
+        student_name = data.get('student_name', '')
+        batch_color = data.get('batch_color', '#3b82f6')
+        paper_set = data.get('paper_set')  # If None, will auto-calculate
+        
+        if not all([seat_position, roll_number, batch_label, seat_row is not None, seat_col is not None]):
+            return jsonify({
+                "status": "error",
+                "message": "Missing required fields: seat_position, seat_row, seat_col, roll_number, batch_label"
+            }), 400
+        
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        
+        # 1. Verify session exists and user owns it
+        cur.execute("""
+            SELECT plan_id, user_id, status FROM allocation_sessions 
+            WHERE session_id = ?
+        """, (session_id,))
+        session_row = cur.fetchone()
+        
+        if not session_row:
+            conn.close()
+            return jsonify({"status": "error", "message": "Session not found"}), 404
+        
+        plan_id, owner_id, status = session_row['plan_id'], session_row['user_id'], session_row['status']
+        
+        if owner_id != request.user_id:
+            conn.close()
+            return jsonify({"status": "error", "message": "Unauthorized"}), 403
+        
+        # 2. Load cache and verify seat is empty
+        cache_manager = CacheManager()
+        cached_data = cache_manager.load_snapshot(plan_id)
+        
+        if not cached_data or 'rooms' not in cached_data:
+            conn.close()
+            return jsonify({"status": "error", "message": "No cached seating plan found"}), 404
+        
+        if room_no not in cached_data['rooms']:
+            conn.close()
+            return jsonify({"status": "error", "message": f"Room '{room_no}' not found in plan"}), 404
+        
+        room_data = cached_data['rooms'][room_no]
+        seating_matrix = room_data.get('raw_matrix', [])
+        
+        # Validate seat coordinates
+        rows = len(seating_matrix)
+        cols = len(seating_matrix[0]) if rows > 0 else 0
+        
+        if seat_row < 0 or seat_row >= rows or seat_col < 0 or seat_col >= cols:
+            conn.close()
+            return jsonify({"status": "error", "message": "Invalid seat coordinates"}), 400
+        
+        current_seat = seating_matrix[seat_row][seat_col]
+        
+        if current_seat.get('is_broken'):
+            conn.close()
+            return jsonify({"status": "error", "message": "Cannot assign to a broken seat"}), 400
+        
+        if not current_seat.get('is_unallocated') and current_seat.get('roll_number'):
+            conn.close()
+            return jsonify({
+                "status": "error", 
+                "message": f"Seat already allocated to {current_seat.get('roll_number')}"
+            }), 400
+        
+        # 3. Auto-calculate paper set if not provided
+        if not paper_set:
+            paper_set = _calculate_paper_set_for_seat(seating_matrix, seat_row, seat_col)
+        
+        # 4. Check for duplicate external student in same session/room/position
+        cur.execute("""
+            SELECT id FROM external_students 
+            WHERE session_id = ? AND room_no = ? AND seat_position = ?
+        """, (session_id, room_no, seat_position))
+        
+        if cur.fetchone():
+            conn.close()
+            return jsonify({"status": "error", "message": "Seat already has an external student"}), 400
+        
+        # 5. Insert into external_students table
+        cur.execute("""
+            INSERT INTO external_students 
+            (session_id, plan_id, room_no, seat_position, seat_row, seat_col, 
+             roll_number, student_name, batch_label, batch_color, paper_set)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (session_id, plan_id, room_no, seat_position, seat_row, seat_col,
+              roll_number, student_name, batch_label, batch_color, paper_set))
+        
+        external_id = cur.lastrowid
+        conn.commit()
+        conn.close()
+        
+        # 6. Update cache with new student
+        new_seat_data = {
+            "position": seat_position,
+            "batch": 0,  # External marker
+            "batch_label": batch_label,
+            "paper_set": paper_set,
+            "block": current_seat.get('block', 0),
+            "roll_number": roll_number,
+            "student_name": student_name,
+            "is_broken": False,
+            "is_unallocated": False,
+            "is_external": True,  # Mark as externally added
+            "external_id": external_id,
+            "display": f"{roll_number}{paper_set}",
+            "css_class": f"external set-{paper_set}",
+            "color": batch_color
+        }
+        
+        # Patch the cache
+        cache_manager.patch_seat(plan_id, room_no, seat_row, seat_col, new_seat_data)
+        
+        return jsonify({
+            "status": "success",
+            "message": f"External student added to seat {seat_position}",
+            "external_id": external_id,
+            "seat": new_seat_data
+        }), 201
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@allocation_bp.route('/sessions/<int:session_id>/rooms/<room_no>/remove-external-student', methods=['POST'])
+@token_required
+def remove_external_student(session_id, room_no):
+    """Remove an externally added student from a seat"""
+    try:
+        data = request.get_json(force=True)
+        seat_position = data.get('seat_position')
+        
+        if not seat_position:
+            return jsonify({"status": "error", "message": "seat_position required"}), 400
+        
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        
+        # Verify ownership
+        cur.execute("""
+            SELECT plan_id, user_id FROM allocation_sessions WHERE session_id = ?
+        """, (session_id,))
+        session_row = cur.fetchone()
+        
+        if not session_row:
+            conn.close()
+            return jsonify({"status": "error", "message": "Session not found"}), 404
+        
+        if session_row['user_id'] != request.user_id:
+            conn.close()
+            return jsonify({"status": "error", "message": "Unauthorized"}), 403
+        
+        plan_id = session_row['plan_id']
+        
+        # Get the external student record
+        cur.execute("""
+            SELECT id, seat_row, seat_col FROM external_students 
+            WHERE session_id = ? AND room_no = ? AND seat_position = ?
+        """, (session_id, room_no, seat_position))
+        
+        ext_row = cur.fetchone()
+        if not ext_row:
+            conn.close()
+            return jsonify({"status": "error", "message": "External student not found at this seat"}), 404
+        
+        seat_row, seat_col = ext_row['seat_row'], ext_row['seat_col']
+        
+        # Delete from database
+        cur.execute("""
+            DELETE FROM external_students 
+            WHERE session_id = ? AND room_no = ? AND seat_position = ?
+        """, (session_id, room_no, seat_position))
+        
+        conn.commit()
+        conn.close()
+        
+        # Restore seat to unallocated state in cache
+        cache_manager = CacheManager()
+        empty_seat_data = {
+            "position": seat_position,
+            "batch": None,
+            "batch_label": None,
+            "paper_set": None,
+            "roll_number": None,
+            "student_name": None,
+            "is_broken": False,
+            "is_unallocated": True,
+            "is_external": False,
+            "display": "UNALLOCATED",
+            "css_class": "unallocated",
+            "color": "#F3F4F6"
+        }
+        
+        cache_manager.patch_seat(plan_id, room_no, seat_row, seat_col, empty_seat_data)
+        
+        return jsonify({
+            "status": "success",
+            "message": f"External student removed from seat {seat_position}"
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@allocation_bp.route('/sessions/<int:session_id>/external-students', methods=['GET'])
+@token_required
+def get_external_students(session_id):
+    """Get all external students for a session"""
+    try:
+        room_no = request.args.get('room_no')
+        
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        
+        # Verify ownership
+        cur.execute("SELECT user_id FROM allocation_sessions WHERE session_id = ?", (session_id,))
+        session_row = cur.fetchone()
+        
+        if not session_row:
+            conn.close()
+            return jsonify({"status": "error", "message": "Session not found"}), 404
+        
+        if session_row['user_id'] != request.user_id:
+            conn.close()
+            return jsonify({"status": "error", "message": "Unauthorized"}), 403
+        
+        if room_no:
+            cur.execute("""
+                SELECT * FROM external_students 
+                WHERE session_id = ? AND room_no = ?
+                ORDER BY seat_position
+            """, (session_id, room_no))
+        else:
+            cur.execute("""
+                SELECT * FROM external_students 
+                WHERE session_id = ?
+                ORDER BY room_no, seat_position
+            """, (session_id,))
+        
+        students = [dict(row) for row in cur.fetchall()]
+        conn.close()
+        
+        return jsonify({
+            "status": "success",
+            "external_students": students,
+            "count": len(students)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+def _calculate_paper_set_for_seat(seating_matrix, row, col):
+    """
+    Calculate the appropriate paper set (A/B) for a seat based on neighbors.
+    Rule: Adjacent seats (left/right) should have alternating paper sets.
+    """
+    rows = len(seating_matrix)
+    cols = len(seating_matrix[0]) if rows > 0 else 0
+    
+    neighbors = []
+    
+    # Check left neighbor
+    if col > 0:
+        left = seating_matrix[row][col - 1]
+        if left and not left.get('is_broken') and not left.get('is_unallocated'):
+            neighbors.append(left.get('paper_set'))
+    
+    # Check right neighbor
+    if col < cols - 1:
+        right = seating_matrix[row][col + 1]
+        if right and not right.get('is_broken') and not right.get('is_unallocated'):
+            neighbors.append(right.get('paper_set'))
+    
+    # If we have neighbors, pick the opposite
+    if neighbors:
+        if 'A' in neighbors:
+            return 'B'
+        elif 'B' in neighbors:
+            return 'A'
+    
+    # Default: alternate based on column (even=A, odd=B)
+    return 'A' if col % 2 == 0 else 'B'
+
+
+@allocation_bp.route('/sessions/<int:session_id>/rooms/<room_no>/empty-seats', methods=['GET'])
+@token_required
+def get_empty_seats(session_id, room_no):
+    """Get all empty seats in a room for external student assignment"""
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        
+        # Verify ownership
+        cur.execute("SELECT plan_id, user_id FROM allocation_sessions WHERE session_id = ?", (session_id,))
+        session_row = cur.fetchone()
+        
+        if not session_row:
+            conn.close()
+            return jsonify({"status": "error", "message": "Session not found"}), 404
+        
+        if session_row['user_id'] != request.user_id:
+            conn.close()
+            return jsonify({"status": "error", "message": "Unauthorized"}), 403
+        
+        plan_id = session_row['plan_id']
+        conn.close()
+        
+        cache_manager = CacheManager()
+        empty_seats = cache_manager.get_empty_seats(plan_id, room_no)
+        
+        return jsonify({
+            "status": "success",
+            "empty_seats": empty_seats,
+            "count": len(empty_seats)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@allocation_bp.route('/sessions/<int:session_id>/rooms/<room_no>/batches', methods=['GET'])
+@token_required
+def get_room_batches(session_id, room_no):
+    """Get all batches currently in a room for the batch dropdown"""
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        
+        # Verify ownership
+        cur.execute("SELECT plan_id, user_id FROM allocation_sessions WHERE session_id = ?", (session_id,))
+        session_row = cur.fetchone()
+        
+        if not session_row:
+            conn.close()
+            return jsonify({"status": "error", "message": "Session not found"}), 404
+        
+        if session_row['user_id'] != request.user_id:
+            conn.close()
+            return jsonify({"status": "error", "message": "Unauthorized"}), 403
+        
+        plan_id = session_row['plan_id']
+        conn.close()
+        
+        cache_manager = CacheManager()
+        cached_data = cache_manager.load_snapshot(plan_id, silent=True)
+        
+        if not cached_data or 'rooms' not in cached_data or room_no not in cached_data['rooms']:
+            return jsonify({"status": "success", "batches": []}), 200
+        
+        room_data = cached_data['rooms'][room_no]
+        batches = []
+        
+        # Extract unique batches from the seating
+        seating_matrix = room_data.get('raw_matrix', [])
+        batch_colors = {}
+        
+        for row in seating_matrix:
+            for seat in row:
+                if seat and not seat.get('is_broken') and not seat.get('is_unallocated'):
+                    label = seat.get('batch_label')
+                    color = seat.get('color')
+                    if label and label not in batch_colors:
+                        batch_colors[label] = color
+        
+        batches = [{"label": label, "color": color} for label, color in batch_colors.items()]
+        
+        return jsonify({
+            "status": "success",
+            "batches": batches
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500

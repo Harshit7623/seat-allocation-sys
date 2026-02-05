@@ -69,7 +69,7 @@ const StatCard = ({ stat, index, loading }) => {
   return (
     <div
       style={cardStyle}
-      className="glass-card relative overflow-hidden p-6 border border-[#c0c0c0] dark:border-[#8a8a8a] shadow-[0_0_22px_rgba(192,192,192,0.2)] dark:shadow-[0_0_22px_rgba(138,138,138,0.22)] hover:scale-[1.01] hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 group"
+      className="glass-card bg-white dark:bg-gray-800 relative overflow-hidden p-6 border-2 border-gray-200 dark:border-gray-700 hover:border-orange-500/50 dark:hover:border-orange-400/50 transition-all duration-300 group rounded-2xl"
     >
       {/* Background Icon */}
       <div className="absolute top-0 right-0 p-4 opacity-5 transform rotate-12 group-hover:scale-110 transition-transform duration-500">
@@ -78,7 +78,7 @@ const StatCard = ({ stat, index, loading }) => {
       
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-4">
-          <div className="p-2 rounded-xl bg-gray-100 dark:bg-gray-700 border border-[#c0c0c0] dark:border-[#8a8a8a]">
+          <div className="p-2 rounded-xl bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
             <stat.icon className={`w-6 h-6 ${stat.color}`} />
           </div>
           
@@ -304,12 +304,12 @@ const DashboardPage = () => {
     return () => clearInterval(interval);
   }, [fetchDashboardData]);
 
-  // Quick actions config
+  // Quick actions config - matching CreatePlan style
   const quickActions = [
-    { label: 'Create Plan', page: 'create-plan', icon: Upload, color: 'bg-orange-500 dark:bg-orange-600' },
-    { label: 'Database Manager', page: 'database', icon: Database, color: 'bg-purple-500 dark:bg-purple-600' },
-    { label: 'Template Editor', page: 'template-editor', icon: Layout, color: 'bg-amber-500 dark:bg-amber-600' },
-    { label: 'Classroom Layout', page: 'classroom', icon: MapPin, color: 'bg-orange-600 dark:bg-orange-700' }
+    { label: 'Create Plan', desc: 'Start new allocation', page: 'create-plan', icon: Upload, bgColor: 'bg-orange-500' },
+    { label: 'Database', desc: 'Manage records', page: 'database', icon: Database, bgColor: 'bg-orange-600' },
+    { label: 'Templates', desc: 'Edit PDF layout', page: 'template-editor', icon: Layout, bgColor: 'bg-amber-500' },
+    { label: 'Classrooms', desc: 'Room layouts', page: 'classroom', icon: MapPin, bgColor: 'bg-orange-500' }
   ];
 
   // Handle download
@@ -356,7 +356,7 @@ const DashboardPage = () => {
       <div className="max-w-7xl mx-auto space-y-8">
         
         {/* Hero Section */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-t-0 border-r-0 border-l-0 border-[#c0c0c0] dark:border-[#8a8a8a] bg-transparent shadow-none dark:shadow-none">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-gray-200 dark:border-gray-700 bg-transparent">
           <div>
             <div className="flex items-center gap-2 mb-2">
               <div className="relative w-3 h-3">
@@ -447,19 +447,22 @@ const DashboardPage = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className="glass-card p-6 border border-[#c0c0c0] dark:border-[#8a8a8a] shadow-[0_0_26px_rgba(192,192,192,0.22)] dark:shadow-[0_0_26px_rgba(138,138,138,0.24)]">
+        <div className="glass-card bg-white dark:bg-gray-900 p-6 border-2 border-gray-200 dark:border-gray-700 rounded-2xl">
           <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {quickActions.map((action, index) => (
               <button
                 key={index}
                 onClick={() => action.page === 'download-report' ? handleDownload() : navigate(`/${action.page}`)}
-                className="flex flex-col items-center gap-3 p-6 border-2 border-[#c0c0c0] dark:border-[#8a8a8a] rounded-lg shadow-[0_0_18px_rgba(192,192,192,0.18)] dark:shadow-[0_0_18px_rgba(138,138,138,0.22)] hover:border-orange-500 dark:hover:border-orange-400 hover:shadow-md transition-all duration-300 bg-white dark:bg-gray-800 group"
+                className="glass-card flex flex-col items-center gap-3 p-6 border-2 border-gray-200 dark:border-gray-700 rounded-2xl hover:border-orange-500 dark:hover:border-orange-400 transition-all duration-300 bg-white dark:bg-gray-800 group"
               >
-                <div className={`${action.color} p-3 rounded-lg group-hover:scale-110 transition-transform duration-300`}>
+                <div className={`${action.bgColor} p-4 rounded-xl shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
                   <action.icon className="text-white" size={24} />
                 </div>
-                <span className="font-medium text-gray-700 dark:text-gray-300">{action.label}</span>
+                <div className="text-center">
+                  <span className="font-bold text-gray-900 dark:text-gray-100 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">{action.label}</span>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{action.desc}</p>
+                </div>
               </button>
             ))}
           </div>
@@ -469,8 +472,8 @@ const DashboardPage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
           
           {/* Terminal Log */}
-          <div className="glass-card p-6 border border-[#c0c0c0] dark:border-[#8a8a8a] shadow-[0_0_28px_rgba(192,192,192,0.2)] dark:shadow-[0_0_28px_rgba(138,138,138,0.24)] flex flex-col min-h-[400px]">
-            <div className="flex items-center justify-between mb-6 pb-4 border-b border-[#c0c0c0] dark:border-[#8a8a8a]">
+          <div className="glass-card bg-white dark:bg-gray-800 p-6 border-2 border-gray-200 dark:border-gray-700 rounded-2xl flex flex-col min-h-[400px]">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-2">
                 <Terminal className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                 <h2 className="text-xl font-bold tracking-widest uppercase text-gray-900 dark:text-gray-100">System Log</h2>
@@ -531,8 +534,8 @@ const DashboardPage = () => {
         {/* Download Modal */}
         {showDownloadModal && (
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="glass-card w-full max-w-md p-6 border border-[#c0c0c0] dark:border-[#8a8a8a] shadow-[0_0_26px_rgba(192,192,192,0.24)] dark:shadow-[0_0_26px_rgba(138,138,138,0.26)] animate-fadeIn">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Download Report</h3>
+            <div className="glass-card bg-white dark:bg-gray-800 w-full max-w-md p-6 border-2 border-gray-200 dark:border-gray-700 rounded-2xl animate-fadeIn">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-3">Download Report</h3>
               <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">{downloadStatus}</p>
               <div className="flex justify-end gap-2">
                 <button
@@ -586,16 +589,47 @@ const DashboardPage = () => {
           text-shadow: 0 0 10px rgba(192,192,192,0.95);
           transition: text-shadow 0.3s ease, color 0.3s ease;
         }
-
         .glass-card {
-          background: rgba(255, 255, 255, 0.9);
-          backdrop-filter: blur(10px);
-          border-radius: 12px;
+          background: rgba(255, 255, 255, 0.65);
+          backdrop-filter: blur(14px) saturate(140%);
+          -webkit-backdrop-filter: blur(14px) saturate(140%);
+
+          border-radius: 16px;
+
+          /* GRAPHITE BORDER */
+          border: 1px solid rgba(100, 116, 139, 0.18);
+
+          box-shadow:
+            0 8px 20px rgba(0, 0, 0, 0.08),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.6);
         }
 
         .dark .glass-card {
-          background: rgba(17, 24, 39, 0.9);
+          position: relative;
+          background: rgba(17, 24, 39, 0.55);
+          backdrop-filter: blur(14px) saturate(130%);
+          border-radius: 16px;
         }
+
+        .dark .glass-card::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          padding: 1px;
+          background: linear-gradient(
+            180deg,
+            rgba(203, 213, 225, 0.22),
+            rgba(203, 213, 225, 0.08)
+          );
+          -webkit-mask:
+            linear-gradient(#000 0 0) content-box,
+            linear-gradient(#000 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          pointer-events: none;
+        }
+        
       `}</style>
     </div>
   );

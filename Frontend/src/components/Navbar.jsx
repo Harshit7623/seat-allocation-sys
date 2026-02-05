@@ -152,7 +152,7 @@ const Navbar = () => {
 
                 <motion.button
                   onClick={handleLogout}
-                  className="flex items-center gap-2 bg-red-500 text-white px-3 py-3 rounded-full border border-red-400/60 hover:bg-red-600 transition-all duration-200 font-bold text-sm uppercase tracking-wide shadow-md hover:shadow-lg"
+                  className="flex items-center gap-2 bg-red-500 text-white px-3 py-3 rounded-full border border-red-400/60 hover:bg-red-600 transition-all duration-200 font-bold text-sm uppercase tracking-wide shadow-md"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
@@ -171,7 +171,7 @@ const Navbar = () => {
                 </motion.button>
                 <motion.button
                   onClick={() => navigate('/signup')}
-                  className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2 rounded-lg border border-orange-500/60 hover:from-orange-600 hover:to-amber-600 transition font-bold text-sm uppercase tracking-wide shadow-md hover:shadow-lg"
+                  className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2 rounded-lg border border-orange-500/60 hover:from-orange-600 hover:to-amber-600 transition font-bold text-sm uppercase tracking-wide shadow-md"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >

@@ -76,11 +76,11 @@ def get_seating_from_database(session_id, room_name=None):
         
         # 1. Get classroom config
         if room_name:
-            cur.execute("SELECT id, name, rows, cols, block_width, broken_seats FROM classrooms WHERE name = ?", (room_name,))
+            cur.execute("SELECT id, name, rows, cols, block_width, block_structure, broken_seats FROM classrooms WHERE name = ?", (room_name,))
         else:
             # Fallback to first allocated room if no name provided
             cur.execute("""
-                SELECT c.id, c.name, c.rows, c.cols, c.block_width, c.broken_seats
+                SELECT c.id, c.name, c.rows, c.cols, c.block_width, c.block_structure, c.broken_seats
                 FROM classrooms c
                 JOIN allocations a ON c.id = a.classroom_id
                 WHERE a.session_id = ?
@@ -97,7 +97,20 @@ def get_seating_from_database(session_id, room_name=None):
         rows_count = classroom['rows']
         cols_count = classroom['cols']
         block_width = classroom['block_width']
+        block_structure_raw = classroom['block_structure']
         broken_seats_str = classroom['broken_seats'] or ""
+        
+        # Parse block_structure from JSON string if needed
+        block_structure = None
+        if block_structure_raw:
+            import json
+            try:
+                if isinstance(block_structure_raw, str):
+                    block_structure = json.loads(block_structure_raw)
+                else:
+                    block_structure = block_structure_raw
+            except:
+                pass
         
         # 2. Get allocations for this room/session
         cur.execute("""
@@ -164,6 +177,7 @@ def get_seating_from_database(session_id, room_name=None):
                 'rows': rows_count,
                 'cols': cols_count,
                 'block_width': block_width,
+                'block_structure': block_structure,  # Variable block widths
                 'broken_seats': broken_seats_str
             },
             'batches': {}, # Re-built by CacheManager if needed, but not critical for PDF
@@ -231,9 +245,21 @@ def get_seating_data_hybrid(data, user_id=None):
     # [4] Use Request Payload
     if 'seating' in data:
         logger.info(f"📄 [Hybrid-Step 4] Using request payload seating data")
+        # Build metadata from request - check nested metadata first, then top-level fields
+        request_metadata = data.get('metadata', data.get('inputs', {}))
+        # Merge top-level fields that might contain block_structure, rows, cols etc.
+        if not request_metadata.get('block_structure') and data.get('block_structure'):
+            request_metadata['block_structure'] = data.get('block_structure')
+        if not request_metadata.get('block_width') and data.get('block_width'):
+            request_metadata['block_width'] = data.get('block_width')
+        if not request_metadata.get('rows') and data.get('rows'):
+            request_metadata['rows'] = data.get('rows')
+        if not request_metadata.get('cols') and data.get('cols'):
+            request_metadata['cols'] = data.get('cols')
+        
         return {
             'seating': data['seating'],
-            'metadata': data.get('metadata', data.get('inputs', {})),
+            'metadata': request_metadata,
             'batches': data.get('batches', {})
         }, "request"
 

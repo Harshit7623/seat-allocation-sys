@@ -137,13 +137,18 @@ class AllocationService:
                  algo_input_rolls[idx] = student_roll_numbers[batch_key]
                  
              idx += 1
+        
+        # Get block_structure from classroom (auto-converted on read)
+        block_structure = classroom.get('block_structure')
+        block_width = int(classroom.get('block_width', 2))
              
         # 3. Instantiate Algorithm
         algo = SeatingAlgorithm(
             rows=rows,
             cols=cols,
             num_batches=num_batches,
-            block_width=int(classroom.get('block_width', 2)),
+            block_width=block_width,
+            block_structure=block_structure,  # NEW: Variable block widths
             broken_seats=broken_seats,
             batch_student_counts=batch_counts,
             batch_colors=batch_colors,
@@ -345,6 +350,16 @@ class AllocationService:
                 DELETE FROM allocations WHERE session_id = ? AND classroom_id = ?
             """, (session_id, target_classroom))
             deleted = cursor.rowcount
+            
+            # Also delete any external students manually added to this room
+            try:
+                db.execute("""
+                    DELETE FROM external_students 
+                    WHERE session_id = ? AND room_no = ?
+                """, (session_id, classroom_name))
+                logger.info(f"Cleared external students for room {classroom_name}")
+            except Exception as e:
+                logger.warning(f"Could not clear external students: {e}")
             
             # Update session count
             db.execute("""
