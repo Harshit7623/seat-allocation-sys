@@ -14,7 +14,7 @@ IMAGE_PATH = str(_BASE_DIR / "data" / "banner.png")
 CACHE_DIR = str(_BASE_DIR.parent / "cache") 
 
 def header_and_footer(c, doc, room_no):
-    """Restored your exact original header/footer logic"""
+    """Restored original header/footer logic with banner image"""
     c.saveState()
     page_width, page_height = A4
     BANNER_HEIGHT = 3.2 * cm
@@ -25,7 +25,7 @@ def header_and_footer(c, doc, room_no):
                     x=doc.leftMargin - 0.8*cm,
                     y=page_height - doc.topMargin - 0.3* cm,
                     width=CONTENT_WIDTH +50,
-                    height=BANNER_HEIGHT ,
+                    height=BANNER_HEIGHT,
                     preserveAspectRatio=True)
     except Exception:
         c.setFont('Times-Bold', 12)
@@ -45,12 +45,18 @@ def header_and_footer(c, doc, room_no):
 def create_attendance_pdf(filename, student_list, batch_label, metadata, extracted_info, template_config=None):
     """Generate attendance PDF using metadata configuration"""
     from datetime import datetime
+    from reportlab.platypus import Image as ReportLabImage # Alias to avoid conflict with other Image
     
     # Use metadata values for attendance settings (passed from frontend)
     # Fallback to template config if metadata doesn't have these fields
     attendance_dept_name = metadata.get('attendance_dept_name', 'Computer Science and Engineering')
-    attendance_year = int(metadata.get('attendance_year', datetime.now().year))
-    attendance_exam_heading = metadata.get('attendance_exam_heading', 'SESSIONAL EXAMINATION')
+    
+    # Academic year is ONLY for calculating student year (1yr, 2yr, etc.)
+    # PDF should always show current year
+    current_year = datetime.now().year
+    academic_year_for_calculation = int(metadata.get('attendance_year', current_year))
+    
+    attendance_exam_heading = metadata.get('attendance_exam_heading', ' EXAMINATION')
     banner_path = metadata.get('attendance_banner_path', IMAGE_PATH)
     
     # If banner path is empty, use default IMAGE_PATH
@@ -72,45 +78,50 @@ def create_attendance_pdf(filename, student_list, batch_label, metadata, extract
     branch_code = extracted_info.get('branch', 'N/A')
     expanded_branch = branch_expansion.get(branch_code, branch_code)
     
-    # Calculate year suffix
-    joining_year = int(extracted_info.get('joining_year', attendance_year))
-    year_diff = attendance_year - joining_year
+    # Calculate year suffix using academic_year_for_calculation
+    joining_year = int(extracted_info.get('joining_year', academic_year_for_calculation))
+    year_diff = academic_year_for_calculation - joining_year
     year_suffix = 1 if year_diff <= 0 else year_diff
     
-    # Build dynamic department header with year
+    # Build dynamic department header
     dept_header = f"DEPARTMENT OF {attendance_dept_name}"
     
     doc = SimpleDocTemplate(
         filename,
         pagesize=A4,
-        topMargin=3.8 * cm,
+        topMargin=3.8 * cm,  # Original margins to accommodate header
         bottomMargin=2.0 * cm,
         leftMargin=1.2 * cm,
         rightMargin=1.2 * cm
     )
+    
     story = []
     styles = getSampleStyleSheet()
-
+    
+    # Set font to Times-Roman for all styles
     for style in styles.byName.values():
         style.fontName = 'Times-Roman'
 
     header_style = styles['Normal'].clone('HeaderStyle')
     header_style.alignment = 1 
     
+    # Department header
     story.append(Paragraph(f"<u><b>{dept_header}</b></u>", header_style))
     story.append(Spacer(1, 0.1*cm))
     
     degree = extracted_info.get('degree', 'B.Tech')
     
+    # Degree, branch, batch, year line - Use CURRENT YEAR for display
     story.append(Paragraph(
-        f"<b>{degree} ({expanded_branch}-{year_suffix}yr), Batch - {joining_year}, Year {attendance_year}</b>", 
+        f"<b>{degree} ({expanded_branch}-{year_suffix}yr), Batch - {joining_year}, Year {current_year}</b>", 
         header_style
     ))
     
+    # Exam heading
     title_style = styles['Normal'].clone('TitleStyle')
     title_style.alignment = 1
     title_style.textColor = colors.darkgreen
-    story.append(Paragraph(f"<b>{attendance_exam_heading}-ATTENDANCE SHEET</b>", title_style))
+    story.append(Paragraph(f"<b>{attendance_exam_heading}</b>", title_style))
     story.append(Spacer(1, 0.3*cm))
 
     info_style = styles['Normal'].clone('InfoStyle')
@@ -135,9 +146,15 @@ def create_attendance_pdf(filename, student_list, batch_label, metadata, extract
     student_list = sorted(student_list, key=lambda s: s.get('roll_number', ''))
 
     for i, student in enumerate(student_list):
+        # Truncate long names to prevent column overflow
+        student_name = student.get('student_name', '')
+        max_name_length = 22
+        if len(student_name) > max_name_length:
+            student_name = student_name[:max_name_length] + "..."
+        
         data.append([
             str(i + 1),
-            student.get('student_name',''), 
+            student_name,
             student.get('roll_number', ''),
             student.get('paper_set', ''),
             "DU                           ",
@@ -191,40 +208,11 @@ def create_attendance_pdf(filename, student_list, batch_label, metadata, extract
     ]))
     story.append(sig_table)
 
+    # Build PDF with header/footer on all pages
     room_no = metadata.get('room_no', 'N/A')
-    
-    # Update header_and_footer to use template banner
-    def header_with_template(c, doc, room_no):
-        c.saveState()
-        page_width, page_height = A4
-        BANNER_HEIGHT = 3.2 * cm
-        CONTENT_WIDTH = page_width - doc.leftMargin - doc.rightMargin 
-        
-        try:
-            c.drawImage(banner_path,
-                        x=doc.leftMargin - 0.8*cm,
-                        y=page_height - doc.topMargin - 0.3* cm,
-                        width=CONTENT_WIDTH +50,
-                        height=BANNER_HEIGHT ,
-                        preserveAspectRatio=True)
-        except Exception:
-            c.setFont('Times-Bold', 12)
-            c.drawCentredString(page_width / 2, page_height - 2*cm, "Header Image Missing")
-
-        room_box_width = 3.1 * cm
-        room_box_height = 0.65 * cm
-        c.rect(page_width - doc.rightMargin - room_box_width + 14, 
-               page_height - 0.98 * cm, 
-               room_box_width, room_box_height)
-        
-        c.setFont('Times-Roman', 10)
-        c.drawString(page_width - doc.rightMargin - room_box_width + 17, 
-                     page_height - 0.8 * cm, f"Room No. {room_no}")
-        c.restoreState()
-    
     doc.build(story, 
-              onFirstPage=lambda canvas, doc: header_with_template(canvas, doc, room_no), 
-              onLaterPages=lambda canvas, doc: header_with_template(canvas, doc, room_no))
+              onFirstPage=lambda canvas, doc: header_and_footer(canvas, doc, room_no), 
+              onLaterPages=lambda canvas, doc: header_and_footer(canvas, doc, room_no))
 
 def process_and_generate_from_cache(plan_id, frontend_metadata=None):
     """

@@ -743,8 +743,17 @@ def export_attendance():
             'time': frontend_metadata.get('time') or '',
             'year': frontend_metadata.get('year') or str(datetime.now().year),
             'room_no': target_room_name or room_no or 'N/A',
+            # Attendance settings
+            'attendance_dept_name': frontend_metadata.get('attendance_dept_name', 'Computer Science and Engineering'),
+            'attendance_year': frontend_metadata.get('attendance_year', datetime.now().year),
+            'attendance_exam_heading': frontend_metadata.get('attendance_exam_heading', 'SESSIONAL EXAMINATION'),
+            'attendance_banner_path': frontend_metadata.get('attendance_banner_path', '')
         }
         
+        # Debug logging
+        logger.info(f"🔍 Frontend metadata received: {frontend_metadata}")
+        logger.info(f"🔍 Attendance Year from frontend: {frontend_metadata.get('attendance_year')}")
+        logger.info(f"🔍 Complete metadata attendance_year: {complete_metadata['attendance_year']}")
         
         logger.info(f"📋 Generating attendance: room={target_room_name}, batch={target_batch_name}, students={len(all_students)}")
         

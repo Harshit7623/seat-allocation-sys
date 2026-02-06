@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   UserCheck, Eye, X, Loader2,
-  BookOpen, Hash, Calendar, Clock, FileDown, Building2, ArrowLeft, Users, Download
+  BookOpen, FileDown, Building2, ArrowLeft, Users
 } from 'lucide-react';
 
 const AttendancePage = ({ showToast }) => {
@@ -32,8 +32,7 @@ const AttendancePage = ({ showToast }) => {
     
     // Course Info
     course_name: "",
-    course_code: "",
-    year: new Date().getFullYear().toString()
+    course_code: ""
   });
 
   useEffect(() => {
@@ -117,23 +116,16 @@ const AttendancePage = ({ showToast }) => {
   // ✅ FIXED: Build metadata with EXACT field names that backend/PDF expects
 const buildCompleteMetadata = () => {
   return {
-    // ✅ Use 'exam_title' (not 'exam_name') - this is what PDF expects
-    exam_title: metadata.exam_title,
-    
-    // ✅ Use 'course_name' - this is what PDF expects
+    // Attendance Settings
+    attendance_dept_name: metadata.attendance_dept_name,
+    attendance_year: metadata.attendance_year,
+    attendance_exam_heading: metadata.attendance_exam_heading,
+    attendance_banner_path: metadata.attendance_banner_path,
+    // Course Info
     course_name: metadata.course_name,
-    
-    // ✅ Use 'course_code' - this is what PDF expects
     course_code: metadata.course_code,
-    
-    // ✅ Use 'date' (not 'exam_date') - this is what PDF expects
-    date: metadata.date,
-    
-    // ✅ Use 'time' - this is what PDF expects
-    time: metadata.time,
-    
-    // ✅ Use 'year' - this is what PDF expects
-    year: metadata.year,
+    date: metadata.date || '',
+    time: metadata.time || '',
     
     // Room info
     room_no: roomName,
@@ -156,6 +148,8 @@ const buildCompleteMetadata = () => {
       const completeMetadata = buildCompleteMetadata();
       
       console.log('📤 Sending batch download request:', { batchLabel, metadata: completeMetadata });
+      console.log('🔍 Academic Year being sent:', completeMetadata.attendance_year);
+      console.log('🔍 Exam Heading being sent:', completeMetadata.attendance_exam_heading);
 
       const response = await fetch('/api/export-attendance', {
         method: 'POST',
@@ -441,17 +435,10 @@ const buildCompleteMetadata = () => {
           <h2 className="text-xs font-black text-orange-500 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
             <BookOpen size={16}/> Course Information
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase text-gray-400 ml-1">Exam Title</label>
-              <input 
-                className="w-full h-12 px-4 rounded-xl border-2 border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-orange-500 outline-none transition-all"
-                value={metadata.exam_title}
-                onChange={e => setMetadata({...metadata, exam_title: e.target.value})}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase text-gray-400 ml-1">Course Name / Department *</label>
+              <label className="text-[10px] font-bold uppercase text-gray-400 ml-1">Course Name *</label>
               <input 
                 placeholder="e.g., Computer Science"
                 className="w-full h-12 px-4 rounded-xl border-2 border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-orange-500 outline-none transition-all"
@@ -469,18 +456,7 @@ const buildCompleteMetadata = () => {
               />
             </div>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-1 gap-6 mt-6">
-            <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900 p-3 rounded-xl border-2 border-gray-100 dark:border-gray-700">
-              <Hash size={18} className="text-orange-500"/>
-              <input 
-                value={metadata.year} 
-                onChange={e => setMetadata({...metadata, year: e.target.value})} 
-                className="bg-transparent dark:text-white outline-none text-sm font-bold w-full"
-                placeholder="2025"
-              />
-            </div>
-          </div>
+
         </div>
 
         {/* Download All Button */}
