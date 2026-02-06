@@ -36,15 +36,22 @@ class TemplateManager:
     
     def _get_default_template(self):
         """Fallback default template"""
+        from datetime import datetime
         return {
+            # Seating Plan Fields
             'dept_name': 'Department of Computer Science & Engineering',
             'exam_details': 'Minor-II Examination (2025 Admitted), November 2025',
             'seating_plan_title': 'Seating Plan',
-            'branch_text': 'Branch: B.Tech(CSE & CSD Ist year)',
-            'room_number': 'Room no. 103A',
+            'current_year': datetime.now().year,
             'coordinator_name': 'Dr. Dheeraj K. Dixit',
             'coordinator_title': 'Dept. Exam Coordinator',
-            'banner_image_path': os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'banner.png')
+            'banner_image_path': os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'banner.png'),
+            
+            # Attendance Sheet Fields
+            'attendance_dept_name': 'Computer Science and Engineering',
+            'attendance_year': datetime.now().year,
+            'attendance_exam_heading': 'SESSIONAL EXAMINATION',
+            'attendance_banner_path': os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'banner.png')
         }
 
     def get_user_template(self, user_id, template_name='default'):
@@ -93,20 +100,24 @@ class TemplateManager:
             cursor.execute('''
                 INSERT OR REPLACE INTO user_templates (
                     user_id, template_name, dept_name, exam_details, 
-                    seating_plan_title, branch_text, room_number,
+                    seating_plan_title, current_year,
                     coordinator_name, coordinator_title, banner_image_path,
+                    attendance_dept_name, attendance_year, attendance_exam_heading, attendance_banner_path,
                     updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 user_id, template_name,
                 template_data.get('dept_name', ''),
                 template_data.get('exam_details', ''),
                 template_data.get('seating_plan_title', ''),
-                template_data.get('branch_text', ''),
-                template_data.get('room_number', ''),
+                template_data.get('current_year', 2024),
                 template_data.get('coordinator_name', ''),
                 template_data.get('coordinator_title', ''),
                 template_data.get('banner_image_path', ''),
+                template_data.get('attendance_dept_name', 'Computer Science'),
+                template_data.get('attendance_year', datetime.now().year),
+                template_data.get('attendance_exam_heading', 'SESSIONAL EXAMINATION'),
+                template_data.get('attendance_banner_path', ''),
                 datetime.now().isoformat()
             ))
             conn.commit()
@@ -155,16 +166,19 @@ class TemplateManager:
         """Generate hash for template content (for caching)"""
         template = self.get_user_template(user_id, template_name)
         
-        # Only hash the relevant fields
+        # Only hash the relevant fields (excluding room_number and branch_text as they're now dynamic)
         template_data = {
             'dept_name': template.get('dept_name', ''),
             'exam_details': template.get('exam_details', ''),
             'seating_plan_title': template.get('seating_plan_title', ''),
-            'branch_text': template.get('branch_text', ''),
-            'room_number': template.get('room_number', ''),
+            'current_year': template.get('current_year', 2024),
             'coordinator_name': template.get('coordinator_name', ''),
             'coordinator_title': template.get('coordinator_title', ''),
-            'banner_image_path': template.get('banner_image_path', '')
+            'banner_image_path': template.get('banner_image_path', ''),
+            'attendance_dept_name': template.get('attendance_dept_name', ''),
+            'attendance_year': template.get('attendance_year', 2024),
+            'attendance_exam_heading': template.get('attendance_exam_heading', ''),
+            'attendance_banner_path': template.get('attendance_banner_path', '')
         }
         
         normalized = json.dumps(template_data, sort_keys=True, separators=(',', ':'))

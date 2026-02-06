@@ -745,9 +745,10 @@ def export_attendance():
             'room_no': target_room_name or room_no or 'N/A',
         }
         
+        
         logger.info(f"📋 Generating attendance: room={target_room_name}, batch={target_batch_name}, students={len(all_students)}")
         
-        # Generate PDF
+        # Generate PDF (metadata now contains attendance settings from frontend)
         timestamp = int(time.time())
         safe_name = (target_batch_name or target_room_name or 'attendance').replace(' ', '_').replace('/', '-')
         temp_filename = f"temp_attendance_{safe_name}_{timestamp}.pdf"
@@ -759,7 +760,7 @@ def export_attendance():
                 temp_filename,
                 all_students,
                 target_batch_name or target_room_name or 'All',
-                complete_metadata,
+                complete_metadata,  # Now includes attendance settings
                 batch_info
             )
         except ImportError:

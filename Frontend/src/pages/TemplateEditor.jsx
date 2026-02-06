@@ -18,18 +18,26 @@ import {
     Building,
     Upload,
     Eye,
-    AlertCircle
+    AlertCircle,
+    Calendar,
+    UserCheck
 } from 'lucide-react';
 
 const initialTemplateState = {
+    // Seating Plan Fields
     dept_name: '',
     seating_plan_title: '',
     exam_details: '',
-    branch_text: '',
-    room_number: '',
+    current_year: new Date().getFullYear(),
     coordinator_name: '',
     coordinator_title: '',
     banner_image_path: '',
+    
+    // Attendance Sheet Fields
+    attendance_dept_name: '',
+    attendance_year: new Date().getFullYear(),
+    attendance_exam_heading: 'SESSIONAL EXAMINATION',
+    attendance_banner_path: '',
 };
 
 function TemplateEditor({ showToast }) {
@@ -381,26 +389,14 @@ function TemplateEditor({ showToast }) {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
                                 <label className="flex items-center gap-2 text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
-                                    <FileText size={16} className="text-orange-500" />
-                                    Branch Text
+                                    <Calendar size={16} className="text-orange-500" />
+                                    Current Exam Year
                                 </label>
                                 <StyledInput
-                                    type="text"
-                                    value={template.branch_text || ''}
-                                    onChange={(e) => handleInputChange('branch_text', e.target.value)}
-                                    placeholder="e.g., Branch: B.Tech(CSE & CSD Ist year)"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="flex items-center gap-2 text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
-                                    <Building size={16} className="text-orange-500" />
-                                    Room Number
-                                </label>
-                                <StyledInput
-                                    type="text"
-                                    value={template.room_number || ''}
-                                    onChange={(e) => handleInputChange('room_number', e.target.value)}
-                                    placeholder="e.g., Room no. 103A"
+                                    type="number"
+                                    value={template.current_year || ''}
+                                    onChange={(e) => handleInputChange('current_year', e.target.value)}
+                                    placeholder="e.g., 2024"
                                 />
                             </div>
                         </div>
@@ -442,6 +438,7 @@ function TemplateEditor({ showToast }) {
                         </div>
                     </div>
 
+                    {/* Banner Image Upload */}
                     <div className="glass-card p-8 border border-[#c0c0c0] dark:border-[#8a8a8a]">
                         <div className="flex items-center gap-3 mb-6 pb-4 border-b border-[#c0c0c0] dark:border-[#8a8a8a]">
                             <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/30">
@@ -549,8 +546,7 @@ function TemplateEditor({ showToast }) {
                             { label: 'Department', value: template.dept_name },
                             { label: 'Title', value: template.seating_plan_title },
                             { label: 'Exam Details', value: template.exam_details },
-                            { label: 'Branch Text', value: template.branch_text },
-                            { label: 'Room', value: template.room_number },
+                            { label: 'Current Year', value: template.current_year },
                             { label: 'Coordinator', value: `${template.coordinator_name || 'Not set'} - ${template.coordinator_title || 'Not set'}` },
                             { label: 'Banner Path', value: template.banner_image_path }
                         ].map((item, idx) => (

@@ -43,6 +43,22 @@ def get_or_create_seating_pdf(data: dict, user_id: str = 'system', template_name
     if data is None:
         raise ValueError("Seating data required")
 
+    # Extract room number from seating data
+    room_no = None
+    # Try metadata first
+    if 'metadata' in data and 'room_no' in data['metadata']:
+        room_no = data['metadata']['room_no']
+    # Fallback: extract from first student record
+    elif 'seating' in data:
+        for row in data['seating']:
+            for seat in row:
+                if seat and not seat.get('is_broken') and not seat.get('is_unallocated'):
+                    room_no = seat.get('room_no')
+                    if room_no:
+                        break
+            if room_no:
+                break
+
     digest = seating_payload_digest(data, user_id, template_name)
     
     # Create user-specific cache directory if template manager available
@@ -57,7 +73,7 @@ def get_or_create_seating_pdf(data: dict, user_id: str = 'system', template_name
 
     if not os.path.exists(filename):
         print(f"🔄 Generating new PDF for user: {user_id}")
-        create_seating_pdf(filename=filename, data=data, user_id=user_id, template_name=template_name)
+        create_seating_pdf(filename=filename, data=data, user_id=user_id, template_name=template_name, room_no=room_no)
     else:
         print(f"♻️ Using cached PDF for user: {user_id}")
     
@@ -73,10 +89,11 @@ def process_seating_data(json_data):
 
     matrix = [[{'text': '', 'bg': None} for _ in range(num_cols)] for _ in range(num_rows)]
     
-    # Initialize summary
+    # Initialize summary with roll number tracking
     summary = {
         'total_allocated': 0,
-        'batch_counts': {} # batch_label -> count
+        'batch_counts': {},  # batch_label -> count
+        'batch_roll_ranges': {}  # batch_label -> {'rolls': [...]}
     }
 
     for r in range(num_rows):
@@ -108,8 +125,48 @@ def process_seating_data(json_data):
                         summary['total_allocated'] += 1
                         label = seat.get('batch_label') or f"Batch {seat.get('batch', 'Unknown')}"
                         summary['batch_counts'][label] = summary['batch_counts'].get(label, 0) + 1
+                        
+                        # Track roll numbers for range calculation
+                        if label not in summary['batch_roll_ranges']:
+                            summary['batch_roll_ranges'][label] = {'rolls': []}
+                        summary['batch_roll_ranges'][label]['rolls'].append(roll_str)
                 
             matrix[r][c] = {'text': content, 'bg': bg}
+    
+    # Process roll number ranges - sort and extract first/last
+    import re
+    
+    def extract_numeric_suffix(roll_no):
+        """Extract trailing digits from roll number for natural sorting"""
+        match = re.search(r'(\d+)$', str(roll_no))
+        return int(match.group(1)) if match else 0
+    
+    for label, range_info in summary['batch_roll_ranges'].items():
+        rolls = range_info['rolls']
+        if rolls:
+            # Sort roll numbers naturally by numeric suffix
+            sorted_rolls = sorted(rolls, key=extract_numeric_suffix)
+            range_info['first'] = sorted_rolls[0]
+            range_info['last'] = sorted_rolls[-1]
+    
+    # Extract branch information with year from batches data
+    batches_data = json_data.get('batches', {})
+    branch_year_combos = set()  # e.g., ("CS", "2024"), ("CS", "2025")
+    degrees = set()
+    
+    for batch_label, batch_info in batches_data.items():
+        info = batch_info.get('info', {})
+        if info.get('branch') and info.get('joining_year'):
+            branch_year_combos.add((info['branch'], info['joining_year']))
+        if info.get('degree'):
+            degrees.add(info['degree'])
+    
+    # Store branch-year info in summary
+    summary['branch_year_info'] = {
+        'branch_year_combos': sorted(list(branch_year_combos)),
+        'degrees': sorted(list(degrees))
+    }
+    
     return matrix, summary
 def format_cell_content(raw, style):
     if not raw.strip():
@@ -121,23 +178,25 @@ def format_cell_content(raw, style):
         text = f"<b>{parts[0]}</b>"
     return Paragraph(text, style)
 
-def create_seating_pdf(filename="algo/pdf_gen/seat_plan_generated/seating_plan.pdf", data=None, user_id: str = 'system', template_name: str = 'default'):
+def create_seating_pdf(filename="algo/pdf_gen/seat_plan_generated/seating_plan.pdf", data=None, user_id: str = 'system', template_name: str = 'default', room_no: str = None):
     """Generate PDF using user's specific template or fallback to default"""
     if data is None:
         raise ValueError("Seating data required")
+    
+    # Use provided room_no or fallback to "N/A"
+    room_no = room_no or "N/A"
     
     # Load user's template configuration or use defaults
     if template_manager:
         template_config = template_manager.get_user_template(user_id, template_name)
         print(f"📋 Using template for user {user_id}: {template_config.get('dept_name', 'Default')}")
     else:
-        # Fallback template config
+        # Fallback template config (no room_number field)
         template_config = {
             'dept_name': 'Department of Computer Science & Engineering',
             'exam_details': 'Minor-II Examination (2025 Admitted), November 2025',
             'seating_plan_title': 'Seating Plan',
             'branch_text': 'Branch: B.Tech(CSE & CSD Ist year)',
-            'room_number': 'Room no. 103A',
             'coordinator_name': 'Dr. Dheeraj K. Dixit',
             'coordinator_title': 'Dept. Exam Coordinator',
             'banner_image_path': IMAGE_PATH
@@ -187,31 +246,40 @@ def create_seating_pdf(filename="algo/pdf_gen/seat_plan_generated/seating_plan.p
             c.drawCentredString(page_width / 2, page_height - doc.topMargin + 1.2 * cm,
                                 f"Header image missing")
         
-        # --- STATISTICS SUMMARY (BOTTOM LEFT) ---
+        # --- BATCH SUMMARY (BOTTOM LEFT) ---
+        # Add heading
+        c.setFont('Times-Bold', 13)  # +3 from summary font size (10)
         stats_x = doc.leftMargin
-        stats_y = doc.bottomMargin / 2 + 10
+        current_y = doc.bottomMargin / 2 + 20
+        c.drawString(stats_x, current_y, "Allocation Summary")
         
-        c.setFont('Helvetica-Bold', 9)
-        c.drawString(stats_x, stats_y + 12, "ALLOCATION SUMMARY")
-        
-        c.setFont('Helvetica', 8.5)
-        current_y = stats_y + 2
+        # Summary content
+        c.setFont('Times-Roman', 10)
+        current_y -= 12  # Move down from heading
         c.drawString(stats_x, current_y, f"Total Students: {summary_stats['total_allocated']}")
         
-        # Draw batch breakdown
+        # Build batch summary with roll number ranges
         batch_line_items = []
         for label, count in summary_stats['batch_counts'].items():
-            batch_line_items.append(f"{label}: {count}")
+            roll_range_info = summary_stats.get('batch_roll_ranges', {}).get(label)
+            if roll_range_info and roll_range_info.get('first') and roll_range_info.get('last'):
+                first_roll = roll_range_info['first']
+                last_roll = roll_range_info['last']
+                # Show range with count
+                batch_line_items.append(f"{first_roll}-{last_roll} ({count})")
+            else:
+                # Fallback to label: count format
+                batch_line_items.append(f"{label}: {count}")
         
-        # Combine batches if there are many, or draw in sequence if few
+        # Display batches with max 2 per line
         if len(batch_line_items) > 0:
             current_y -= 10
-            batch_text = " | ".join(batch_line_items)
-            # Simple wrapping if extremely long?
-            if len(batch_text) > 80:
-                c.drawString(stats_x, current_y, batch_text[:80] + "...")
-            else:
+            # Group batches into lines of max 2
+            for i in range(0, len(batch_line_items), 2):
+                batch_group = batch_line_items[i:i+2]
+                batch_text = " | ".join(batch_group)
                 c.drawString(stats_x, current_y, batch_text)
+                current_y -= 10  # Move to next line for next group
 
         # --- COORDINATOR (BOTTOM RIGHT) ---
         c.setFont('Helvetica', 9)
@@ -309,13 +377,61 @@ def create_seating_pdf(filename="algo/pdf_gen/seat_plan_generated/seating_plan.p
     br_style.fontSize = 12
     br_style.fontName = 'Helvetica-Bold'
     
-    branch = Paragraph(f"<b>{template_config.get('branch_text')}</b>", br_style)
-    room = Paragraph(f"<b>{template_config.get('room_number')}</b>", br_style)
+    # Construct dynamic branch text from cache data with year grouping
+    # Get current year from template (default to current year if not set)
+    from datetime import datetime
+    current_year = int(template_config.get('current_year', datetime.now().year))
+    
+    branch_year_info = summary_stats.get('branch_year_info', {})
+    branch_year_combos = branch_year_info.get('branch_year_combos', [])
+    degrees = branch_year_info.get('degrees', [])
+    
+    if branch_year_combos and degrees:
+        # Branch code expansion mapping: CS -> CSE, CD -> CSD, etc.
+        branch_expansion = {
+            'CS': 'CSE',
+            'CD': 'CSD',
+            'IT': 'IT',
+            'EC': 'ECE',
+            'EE': 'EEE',
+            'ME': 'ME',
+            'CE': 'CE'
+        }
+        
+        # Group branches by year
+        year_to_branches = {}  # {1: ['CSE', 'CSD'], 2: ['CSE', 'CSD']}
+        
+        for branch_code, joining_year in branch_year_combos:
+            expanded_branch = branch_expansion.get(branch_code, branch_code)
+            
+            # Calculate year: max(1, current_year - joining_year)
+            year_diff = current_year - int(joining_year)
+            year = 1 if year_diff <= 0 else year_diff
+            
+            if year not in year_to_branches:
+                year_to_branches[year] = []
+            year_to_branches[year].append(expanded_branch)
+        
+        # Build grouped branch-year strings: [CSE & CSD - 1yr] & [CSE & CSD - 2yr]
+        year_groups = []
+        for year in sorted(year_to_branches.keys()):
+            branches_list = sorted(year_to_branches[year])
+            branches_str = ' & '.join(branches_list)
+            year_groups.append(f"[{branches_str} - {year}yr]")
+        
+        # Format: "Branch: B.Tech([CSE & CSD - 1yr] & [CSE & CSD - 2yr])"
+        branch_text = f"Branch: {degrees[0]}({' & '.join(year_groups)})"
+    else:
+        # Fallback to template if no branch info available
+        branch_text = template_config.get('branch_text', 'Branch: N/A')
+    
+    branch = Paragraph(f"<b>{branch_text}</b>", br_style)
+    room_text = f"Room no. {room_no}"
+    room = Paragraph(f"<b>{room_text}</b>", br_style)
     
     page_width = CUSTOM_PAGE_SIZE[0]
     content_width = page_width - doc.leftMargin - doc.rightMargin
 
-    room_text = template_config.get('room_number', 'Room no. 103A')
     room_width = stringWidth(room_text, "Helvetica-Bold", 12) + 10
     room_width = min(room_width, content_width)
     branch_col_width = content_width - room_width 
@@ -330,9 +446,9 @@ def create_seating_pdf(filename="algo/pdf_gen/seat_plan_generated/seating_plan.p
         ('TOPPADDING', (0, 0), (-1, -1), 0),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
     ]))
-    story.append(Spacer(0, 0.5 * cm))
+    story.append(Spacer(0, 0.3 * cm))  # Reduced from 0.5cm
     story.append(br_table)
-    story.append(Spacer(0, 0.4 * cm))
+    story.append(Spacer(0, 0.2 * cm))  # Reduced from 0.4cm
 
     # Build the seating table with proper block separation
     if num_cols > 0 and num_rows > 0:
@@ -361,17 +477,25 @@ def create_seating_pdf(filename="algo/pdf_gen/seat_plan_generated/seating_plan.p
         col_width = content_width / num_cols + 6
         table = Table(table_content, colWidths=[col_width] * num_cols)
 
-        # Base table styling
+        # Dynamic padding based on number of rows to fit 10 rows per page
+        # When rows <= 10, use smaller padding to fit all on one page
+        # When rows > 10, still use smaller padding for consistent appearance
+        if num_rows <= 10:
+            cell_padding = 4  # Reduced padding to fit 10 rows
+        else:
+            cell_padding = 4  # Keep same padding for consistency
+        
+        # Base table styling with dynamic padding
         style_cmds.extend([
             ('GRID', (0, 0), (-1, -1), 1.0, colors.black),  # Normal grid
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 2),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 2),
-            ('TOPPADDING', (0, 0), (-1, 0), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            ('TOPPADDING', (0, 1), (-1, -1), 7),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 7),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('TOPPADDING', (0, 0), (-1, -1), cell_padding),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), cell_padding),
+            ('LEFTPADDING', (0, 0), (-1, -1), 3),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
         ])
 
         # ✅ Add THICK BORDERS between blocks (visual separation) using block_ranges
@@ -399,6 +523,11 @@ def create_seating_pdf(filename="algo/pdf_gen/seat_plan_generated/seating_plan.p
                         pass  # Skip invalid colors
 
         table.setStyle(TableStyle(style_cmds))
+        
+        # Split table to ensure max 10 rows per page
+        table._splitByRow = True
+        table._maxRowsPerPage = 10
+        
         story.append(table)
 
     doc.build(story, onFirstPage=header_and_footer, onLaterPages=header_and_footer)

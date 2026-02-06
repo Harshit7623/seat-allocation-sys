@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  UserCheck, Eye, X, Loader2, 
-  BookOpen, Hash, Calendar, Clock, FileDown, Building2, ArrowLeft, Users
+import {
+  UserCheck, Eye, X, Loader2,
+  BookOpen, Hash, Calendar, Clock, FileDown, Building2, ArrowLeft, Users, Download
 } from 'lucide-react';
 
 const AttendancePage = ({ showToast }) => {
-  const { planId } = useParams(); 
+  const { planId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -24,11 +24,15 @@ const AttendancePage = ({ showToast }) => {
   const [previewData, setPreviewData] = useState(null);
   
   const [metadata, setMetadata] = useState({
-    exam_title: "SESSIONAL EXAMINATION",
+    // Attendance Settings
+    attendance_dept_name: 'Computer Science and Engineering',
+    attendance_year: new Date().getFullYear(),
+    attendance_exam_heading: 'SESSIONAL EXAMINATION',
+    attendance_banner_path: '',
+    
+    // Course Info
     course_name: "",
     course_code: "",
-    date: new Date().toISOString().split('T')[0],
-    time: "10:00 AM - 12:00 PM",
     year: new Date().getFullYear().toString()
   });
 
@@ -386,10 +390,56 @@ const buildCompleteMetadata = () => {
           </div>
         )}
 
-        {/* Metadata Form */}
+        {/* Attendance Settings */}
+        <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 border-2 border-gray-100 dark:border-gray-700 shadow-xl">
+          <h2 className="text-xs font-black text-emerald-500 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+            <UserCheck size={16}/> Attendance Sheet Configuration
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase text-gray-400 ml-1">Department Name</label>
+              <input 
+                className="w-full h-12 px-4 rounded-xl border-2 border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-emerald-500 outline-none transition-all"
+                value={metadata.attendance_dept_name}
+                onChange={e => setMetadata({...metadata, attendance_dept_name: e.target.value})}
+                placeholder="e.g., Computer Science and Engineering"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase text-gray-400 ml-1">Academic Year</label>
+              <input 
+                type="number"
+                className="w-full h-12 px-4 rounded-xl border-2 border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-emerald-500 outline-none transition-all"
+                value={metadata.attendance_year}
+                onChange={e => setMetadata({...metadata, attendance_year: e.target.value})}
+                placeholder="e.g., 2024"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase text-gray-400 ml-1">Examination Heading</label>
+              <input 
+                className="w-full h-12 px-4 rounded-xl border-2 border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-emerald-500 outline-none transition-all"
+                value={metadata.attendance_exam_heading}
+                onChange={e => setMetadata({...metadata, attendance_exam_heading: e.target.value})}
+                placeholder="e.g., SESSIONAL EXAMINATION"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase text-gray-400 ml-1">Banner Image Path (Optional)</label>
+              <input 
+                className="w-full h-12 px-4 rounded-xl border-2 border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:border-emerald-500 outline-none transition-all"
+                value={metadata.attendance_banner_path}
+                onChange={e => setMetadata({...metadata, attendance_banner_path: e.target.value})}
+                placeholder="Path to banner image"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Course Details */}
         <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 border-2 border-gray-100 dark:border-gray-700 shadow-xl">
           <h2 className="text-xs font-black text-orange-500 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-            <BookOpen size={16}/> Step 1: Enter Exam Details
+            <BookOpen size={16}/> Course Information
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
@@ -420,25 +470,7 @@ const buildCompleteMetadata = () => {
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-            <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900 p-3 rounded-xl border-2 border-gray-100 dark:border-gray-700">
-              <Calendar size={18} className="text-orange-500"/>
-              <input 
-                type="date" 
-                value={metadata.date} 
-                onChange={e => setMetadata({...metadata, date: e.target.value})} 
-                className="bg-transparent dark:text-white outline-none text-sm font-bold w-full"
-              />
-            </div>
-            <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900 p-3 rounded-xl border-2 border-gray-100 dark:border-gray-700">
-              <Clock size={18} className="text-orange-500"/>
-              <input 
-                value={metadata.time} 
-                onChange={e => setMetadata({...metadata, time: e.target.value})} 
-                className="bg-transparent dark:text-white outline-none text-sm font-bold w-full"
-                placeholder="10:00 AM - 12:00 PM"
-              />
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-1 gap-6 mt-6">
             <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900 p-3 rounded-xl border-2 border-gray-100 dark:border-gray-700">
               <Hash size={18} className="text-orange-500"/>
               <input 
