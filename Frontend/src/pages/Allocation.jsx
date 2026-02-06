@@ -10,6 +10,7 @@ import {
   UserPlus, Palette
 } from 'lucide-react';
 import OptimizationConfigModal from '../components/OptimizationConfigModal';
+import FeatureTooltip from '../components/FeatureTooltip';
 
 const Card = ({ className, children, ref }) => <div ref={ref} className={`glass-card ${className}`}>{children}</div>;
 
@@ -125,6 +126,7 @@ const AllocationPage = ({ showToast }) => {
   const [undoing, setUndoing] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [stats, setStats] = useState(null);
+  const [batchAllocations, setBatchAllocations] = useState({});
   const [usedRoomIds, setUsedRoomIds] = useState([]);
   const [selectedRoomName, setSelectedRoomName] = useState("");
 
@@ -164,6 +166,7 @@ const AllocationPage = ({ showToast }) => {
           setSession(data.session_data);
           setHasActiveSession(true);
           await loadUploadedBatches(data.session_data.session_id);
+          await loadBatchAllocations(data.session_data.session_id);
           setUsedRoomIds(data.session_data.allocated_rooms?.map(r => r.classroom_id) || []);
           console.log('✅ Active session loaded:', data.session_data.session_id);
         } else {
@@ -204,6 +207,29 @@ const AllocationPage = ({ showToast }) => {
       console.error('Failed to load batches:', err);
     } finally {
       setLoadingBatches(false);
+    }
+  };
+
+  const loadBatchAllocations = async (sessionId) => {
+    if (!sessionId) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/sessions/${sessionId}/stats`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      
+      if (data.success && Array.isArray(data.stats?.batches)) {
+        const allocMap = {};
+        data.stats.batches.forEach(batch => {
+          allocMap[batch.batch_name] = batch.count || 0;
+        });
+        setBatchAllocations(allocMap);
+        console.log('📊 Loaded batch allocations:', allocMap);
+      }
+    } catch (err) {
+      console.error('Failed to load batch allocations:', err);
     }
   };
 
@@ -466,11 +492,13 @@ const AllocationPage = ({ showToast }) => {
       if (sessionData.success) {
         setSession(sessionData.session_data);
         setUsedRoomIds(sessionData.session_data.allocated_rooms?.map(r => r.classroom_id) || []);
+        await loadBatchAllocations(sessionData.session_data.session_id);
       }
 
       setWebData(null);
       setSelectedRoomId("");
       setSelectedBatchIds([null]);
+      setNumBatchesToAllocate(1);
 
       if (showToast) {
         const remaining = data.remaining_count || 0;
@@ -1103,6 +1131,11 @@ const AllocationPage = ({ showToast }) => {
                     <span className="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-lg font-bold border border-blue-200 dark:border-blue-800">
                       {(rows * cols) - parseBrokenSeats().length} Seats
                     </span>
+                    {blockStructure && Array.isArray(blockStructure) && blockStructure.length > 0 && (
+                      <span className="bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 px-3 py-1.5 rounded-lg font-bold border border-purple-200 dark:border-purple-800">
+                        Blocks: {blockStructure.join(':')}
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -1163,7 +1196,7 @@ const AllocationPage = ({ showToast }) => {
                           </div>
                           {selectedBatch && (
                             <div className="text-xs font-mono text-gray-600 dark:text-gray-400 px-3 py-1.5 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
-                              Total Students: <span className="font-bold">{selectedBatch.student_count}</span>
+                              Total Students: <span className="font-bold">{selectedBatch.student_count}</span> | Unallocated: <span className="font-bold text-orange-600 dark:text-orange-400">{selectedBatch.student_count - (batchAllocations[selectedBatch.batch_name] || 0)}</span>
                             </div>
                           )}
                         </div>
@@ -1183,7 +1216,12 @@ const AllocationPage = ({ showToast }) => {
                     className="w-5 h-5 rounded border-2 border-gray-300 text-orange-600 focus:ring-2 focus:ring-orange-500"
                   />
                   <Layout size={16} className="text-orange-500" />
-                  Fill By Columns
+                  <FeatureTooltip
+                    title="Fill By Columns"
+                    description="Allocates students column by column, maintaining the order from your input data. Each column is completely filled before moving to the next one."
+                  >
+                    <span>Fill By Columns</span>
+                  </FeatureTooltip>
                 </label>
                 <label className="flex items-center gap-3 text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer hover:text-orange-600 dark:hover:text-orange-400 transition-colors">
                   <input 
@@ -1193,7 +1231,12 @@ const AllocationPage = ({ showToast }) => {
                     className="w-5 h-5 rounded border-2 border-gray-300 text-orange-600 focus:ring-2 focus:ring-orange-500"
                   />
                   <RefreshCw size={16} className="text-orange-500" />
-                  Randomize Within Column
+                  <FeatureTooltip
+                    title="Randomize Within Column"
+                    description="Shuffles student positions within each column instead of maintaining sequential order. This reduces exam malpractice while keeping batch organization intact."
+                  >
+                    <span>Randomize Within Column</span>
+                  </FeatureTooltip>
                 </label>
                 <label className="flex items-center gap-3 text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer hover:text-orange-600 dark:hover:text-orange-400 transition-colors">
                   <input 
@@ -1204,7 +1247,12 @@ const AllocationPage = ({ showToast }) => {
                   />
                   <div className="flex items-center gap-2">
                     <BarChart3 size={16} className="text-orange-500" />
-                    <span>Optimize Room</span>
+                    <FeatureTooltip
+                      title="Optimize Room"
+                      description="Intelligently fills leftover empty seats in a room with students from a different batch. Creates better room utilization and reduces wasted seating capacity."
+                    >
+                      <span>Optimize Room</span>
+                    </FeatureTooltip>
                     <span className="text-[10px] uppercase font-black bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded">
                       New
                     </span>
