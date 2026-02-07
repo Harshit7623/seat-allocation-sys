@@ -84,7 +84,7 @@ def create_attendance_pdf(filename, student_list, batch_label, metadata, extract
     year_suffix = 1 if year_diff <= 0 else year_diff
     
     # Build dynamic department header
-    dept_header = f"DEPARTMENT OF {attendance_dept_name}"
+    dept_header = f"Department of {attendance_dept_name}"
     
     doc = SimpleDocTemplate(
         filename,
