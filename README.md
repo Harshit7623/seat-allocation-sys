@@ -9,6 +9,8 @@ A high-performance, intelligent seating management platform designed for educati
 - **Intelligent Seating Engine**: Automated generation based on room capacity, student count, and branching logic.
 - **Academic Integrity (Paper Sets)**: Strict A/B alternation following student sequence, skipping broken/empty seats for perfect isolation.
 - **Batch Isolation**: Smart spacing that prevents students from the same batch sitting together within classroom blocks.
+- **Adjacent Seating Option** 🆕: Conditional feature for single-batch allocations allowing same-batch students to sit adjacent while maintaining paper set alternation.
+- **Majority-Based Branch Detection** 🆕: Intelligent branch identification by sampling 3-5 students, correctly handling inter-branch program students.
 - **Dynamic Hall Visualization**: Interactive, responsive grid layout with aisle support and sub-room blocking.
 - **Student Data Management**: Robust ingestion of student records with support for real enrollment strings.
 - **Comprehensive Reporting**: Generation of automated Attendance Sheets (PDF), Seating Charts (PDF), and Room Statistics.
@@ -63,7 +65,7 @@ Built for high readability and professional aesthetics:
 
 ## 📊 PROJECT HEALTH & METRICS
 
-*Last updated: 17 January 2026*
+*Last updated: 9 February 2026*
 
 | Category | Metric | Rating |
 | :--- | :--- | :--- |

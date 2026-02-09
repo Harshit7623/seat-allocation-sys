@@ -44,7 +44,8 @@ class AllocationService:
         session_id: int, 
         classroom: Dict[str, Any], 
         student_distribution: Dict,
-        student_roll_numbers: Dict[str, List[str]] = None
+        student_roll_numbers: Dict[str, List[str]] = None,
+        allow_adjacent_same_batch: bool = False
     ) -> Dict[str, Any]:
         """
         Run the seating algorithm for a specific classroom.
@@ -153,7 +154,8 @@ class AllocationService:
             batch_student_counts=batch_counts,
             batch_colors=batch_colors,
             batch_labels=batch_labels,
-            batch_roll_numbers=algo_input_rolls
+            batch_roll_numbers=algo_input_rolls,
+            allow_adjacent_same_batch=allow_adjacent_same_batch
         )
         
         # 4. Run Generation

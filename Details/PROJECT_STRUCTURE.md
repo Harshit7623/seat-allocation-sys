@@ -24,7 +24,7 @@ algo/
 │   ├── algorithm/           # The Engine
 │   │   └── seating.py       # SeatingAlgorithm Core logic
 │   ├── cache/               # Performance Layer
-│   │   └── cache_manager.py # Hybrid L1/L2 Cache Engine
+│   │   └── cache_manager.py # Hybrid L1/L2 Cache Engine (with majority branch detection)
 │   └── models/              # Shared Definitions
 │       └── models.py        # Seat & PaperSet Dataclasses
 │
@@ -39,11 +39,18 @@ algo/
 │   └── allocation_service.py# High-level allocation logic
 │
 ├── pdf_gen/                 # 📄 PDF Generation Engine
-│   └── pdf_gen.py           # Reportlab implementation
+│   ├── pdf_generation.py    # Seating plan PDF generator
+│   └── template_manager.py  # Template handling
+│
+├── attendence_gen/          # 📋 Attendance Sheet Generator
+│   └── attend_gen.py        # Attendance PDF with branch detection
 │
 ├── utils/                   # 🛠️ Helpers
 │   ├── helpers.py           # String/Date utilities
 │   └── parser.py            # CSV/Excel parsing
+│
+├── cache/                   # 💾 JSON Cache Repository
+│   └── PLAN-*.json          # Session snapshots
 │
 ├── app.py                   # 🚀 Flask Entry Point (Main)
 ├── main.py                  # Factory & Blueprint Registry
@@ -72,4 +79,4 @@ Detailed documentation is now consolidated into three root-level files:
 3. [ALGORITHM_SPECIFICATION.md](ALGORITHM_SPECIFICATION.md): Core seating logic and constraints.
 
 ---
-*Last Updated: January 2026*
+*Last Updated: February 2026*

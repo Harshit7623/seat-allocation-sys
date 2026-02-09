@@ -95,7 +95,7 @@ Welcome to the technical specification of the Seat Allocation System. This porta
   </div>
   <div style={{ padding: '1rem', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.05)' }}>
     <small style={{ opacity: 0.6 }}>Version</small>
-    <div style={{ color: '#f59e0b', fontWeight: 'bold' }}>2.3 Stable</div>
+    <div style={{ color: '#f59e0b', fontWeight: 'bold' }}>v2.4 Stable</div>
   </div>
 </div>
 

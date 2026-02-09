@@ -50,6 +50,8 @@ class SeatingAlgorithm:
         # NEW: real enrollment numbers per batch.
         # Example: {1: ["BTCS24O1001", "BTCS24O1002"], 2: ["BTCD24O2001", ...]}
         batch_roll_numbers: Optional[Dict[int, List[str]]] = None,
+        # NEW: Allow adjacent seating for same batch (useful for single-batch scenarios)
+        allow_adjacent_same_batch: bool = False,
     ):
         """
         rows, cols, num_batches: as before
@@ -116,6 +118,8 @@ class SeatingAlgorithm:
         self.start_rolls = start_rolls or {}
         # NEW: per-batch real enrollment/roll strings
         self.batch_roll_numbers = batch_roll_numbers or {}
+        # NEW: Allow adjacent seating for same batch
+        self.allow_adjacent_same_batch = allow_adjacent_same_batch
         # zero-pad width for serial portion
         self.serial_width = max(0, serial_width)
         # serial_mode: 'per_batch' or 'global'
@@ -312,8 +316,8 @@ class SeatingAlgorithm:
             # Column-major assignment (Batch by Column)
             for col in range(self.cols):
                 # BLOCK-AWARE GAP: If only one batch is assigned, skip odd columns WITHIN each block
-                # to prevent same-batch horizontal neighbors. Isolation is relaxed across block boundaries.
-                if self.num_batches == 1:
+                # to prevent same-batch horizontal neighbors (unless allow_adjacent_same_batch is True)
+                if self.num_batches == 1 and not self.allow_adjacent_same_batch:
                     col_in_block = self._get_col_in_block(col)
                     if col_in_block % 2 != 0:
                         # This is a gap column within a block
@@ -682,9 +686,9 @@ class SeatingAlgorithm:
         constraints.append(
             {
                 "name": "Batch Isolation",
-                "description": "No students of same batch in adjacent seats (horizontal/vertical)",
-                "applied": True,
-                "satisfied": self._verify_no_adjacent_batches(),
+                "description": "No students of same batch in adjacent seats (horizontal/vertical)" if not self.allow_adjacent_same_batch else "Adjacent seating allowed for same batch",
+                "applied": not self.allow_adjacent_same_batch,
+                "satisfied": self._verify_no_adjacent_batches() if not self.allow_adjacent_same_batch else True,
             }
         )
 

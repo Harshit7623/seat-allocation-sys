@@ -75,8 +75,8 @@ import CodeHeader from '@site/src/components/filetypeheaderstyle';
     particleCount={12}
     glowColor="132, 0, 255"
   >
-    <h3>🎯 Smart Algorithm <span style={{ backgroundColor: '#f97316', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', verticalAlign: 'middle', marginLeft: '8px' }}>NEW UPDATE v2.3</span></h3>
-    <p>Enhanced <b>Sequence-Centric</b> paper sets that maintain alternation by student order, intelligently skipping broken seats while ensuring academic integrity.</p>
+    <h3>🎯 Smart Algorithm <span style={{ backgroundColor: '#f97316', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', verticalAlign: 'middle', marginLeft: '8px' }}>NEW UPDATE v2.4</span></h3>
+    <p>Enhanced <b>Sequence-Centric</b> paper sets that maintain alternation by student order, intelligently skipping broken seats while ensuring academic integrity. Now includes <b>adjacent seating option</b> for single-batch scenarios.</p>
   </MagicBento>
 
   <MagicBento enableStars={true} glowColor="255, 100, 0">
@@ -263,16 +263,17 @@ The frontend communicates with the backend through JSON HTTP requests. The backe
 
 ## System Highlights
 
-### 8 Built-in Constraints
+### 9 Built-in Constraints
 The algorithm strictly follows these rules to ensure a valid and conflict-free allocation.
 - ✓ Broken Seats (unavailable positions)
 - ✓ Batch Limits (per-batch student count)
 - ✓ Block Width (seating structure)
 - ✓ Paper Sets (Sequence-strict A/B alternation skipping broken seats) <span style={{ backgroundColor: '#f97316', color: 'white', padding: '2px 4px', borderRadius: '4px', fontSize: '0.6rem', verticalAlign: 'middle' }}>v2.3</span>
 - ✓ Column-Batch Mapping
-- ✓ Adjacent Batch Control
+- ✓ Adjacent Batch Control (conditional for single-batch) <span style={{ backgroundColor: '#10b981', color: 'white', padding: '2px 4px', borderRadius: '4px', fontSize: '0.6rem', verticalAlign: 'middle' }}>v2.4</span>
 - ✓ Roll Format Validation
 - ✓ Unallocated Tracking
+- ✓ Majority-Based Branch Detection <span style={{ backgroundColor: '#10b981', color: 'white', padding: '2px 4px', borderRadius: '4px', fontSize: '0.6rem', verticalAlign: 'middle' }}>v2.4</span>
 
 ### Default Batch Colors
 Visual cues used in the seating grid to distinguish between different student batches.
@@ -380,5 +381,5 @@ Have questions? Want to contribute?
 
 
 
-**Version**: 2.1  
-**Last Updated**: January 2026
+**Version**: 2.4  
+**Last Updated**: February 2026
