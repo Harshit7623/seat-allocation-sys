@@ -842,7 +842,14 @@ const CreatePlan = ({ showToast }) => {
                   )}
 
                   {/* Close button */}
-                <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-3">
+                  <button
+                    onClick={() => navigate(`/master-plan/${planDetails.plan_id}`)}
+                    className="w-full px-6 py-3 bg-purple-500 hover:bg-purple-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-purple-500/25"
+                  >
+                    <BarChart3 size={18} />
+                    Generate Master Plan
+                  </button>
                   <button
                     onClick={closePlanViewer}
                     className="w-full px-6 py-3 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
