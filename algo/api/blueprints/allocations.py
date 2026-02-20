@@ -263,7 +263,8 @@ def generate_seating():
             start_rolls=parse_str_dict(data.get("start_rolls")),
             batch_colors=colors,
             serial_mode=data.get("serial_mode", "per_batch"),
-            serial_width=int(data.get("serial_width", 0))
+            serial_width=int(data.get("serial_width", 0)),
+            allow_adjacent_same_batch=bool(data.get("allow_adjacent_same_batch", False))
         )
         
         if session_id:
@@ -412,7 +413,8 @@ def manual_generate_seating():
             start_rolls=start_rolls,
             batch_colors=parse_str_dict(data.get("batch_colors")),
             serial_mode=data.get("serial_mode", "per_batch"),
-            serial_width=int(data.get("serial_width", 0))
+            serial_width=int(data.get("serial_width", 0)),
+            allow_adjacent_same_batch=bool(data.get("allow_adjacent_same_batch", False))
         )
         
         algo.generate_seating()

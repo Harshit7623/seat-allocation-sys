@@ -110,6 +110,8 @@ flowchart TD
 
 ### Hybrid Caching (Dual-Layer)
 - **L1 (Data Layer)**: Located in `algo/core/cache/`. Manages JSON seating snapshots within `PLAN-<session_id>.json`. This avoids re-running the algorithm for every view/PDF request.
+  - **Branch Detection** 🆕: Uses majority voting (3-5 student samples) to determine batch branch codes
+  - **Smart Parsing**: Handles both old (`BTCS241001`) and new (`0901CS231067`) enrollment formats
 - **L2 (File Layer)**: Located in `algo/pdf_gen/`. Stores rendered PDF files indexed by a hash of their content and template.
 
 ### Session Lifecycle Management
@@ -142,4 +144,4 @@ classDiagram
 ```
 
 ---
-*Documentation State: Modular v2.3*
+*Documentation State: Modular v2.4 | Last Updated: February 2026*

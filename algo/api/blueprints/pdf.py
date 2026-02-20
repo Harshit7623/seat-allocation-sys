@@ -602,14 +602,20 @@ def save_template_config():
                 'dept_name': request.form.get('dept_name', ''),
                 'exam_details': request.form.get('exam_details', ''),
                 'seating_plan_title': request.form.get('seating_plan_title', ''),
+                'current_year': int(request.form.get('current_year', datetime.now().year)),
                 'branch_text': request.form.get('branch_text', ''),
                 'room_number': request.form.get('room_number', ''),
                 'coordinator_name': request.form.get('coordinator_name', ''),
                 'coordinator_title': request.form.get('coordinator_title', ''),
+                # Attendance fields
+                'attendance_dept_name': request.form.get('attendance_dept_name', 'Computer Science and Engineering'),
+                'attendance_year': int(request.form.get('attendance_year', datetime.now().year)),
+                'attendance_exam_heading': request.form.get('attendance_exam_heading', 'SESSIONAL EXAMINATION'),
+                'attendance_banner_path': request.form.get('attendance_banner_path', ''),
             }
             template_name = request.form.get('template_name', 'default')
             
-            # Handle banner upload if nested in FormData
+            # Handle banner upload if present in FormData
             if 'bannerImage' in request.files:
                 file = request.files['bannerImage']
                 banner_path = template_manager.save_user_banner(user_id, file, template_name)

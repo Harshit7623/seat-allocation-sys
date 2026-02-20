@@ -141,7 +141,7 @@ data.constraints_status.constraints     // Array of constraint objects`}
   "serial_width": 4,
   
   "batch_by_column": true,
-  "enforce_no_adjacent_batches": false,
+  "allow_adjacent_same_batch": false,
   "batch_roll_numbers": {
     "1": ["Student1", "Student2"],
     "2": ["Student3", "Student4"]
@@ -331,7 +331,7 @@ data.constraints_status.constraints     // Array of constraint objects`}
     roll_template: "{prefix}{year}O{serial}",
     serial_width: 4,
     batch_by_column: true,
-    enforce_no_adjacent_batches: false
+    allow_adjacent_same_batch: false  // NEW v2.4: Enable for single-batch adjacent seating
   };
   
   return fetch('/api/generate-seating', {
@@ -550,5 +550,5 @@ data.constraints_status.constraints.forEach(c => {
 
 ---
 
-**Version**: 2.3  
-**Last Updated**: January 24, 2026
+**Version**: 2.4  
+**Last Updated**: February 9, 2026

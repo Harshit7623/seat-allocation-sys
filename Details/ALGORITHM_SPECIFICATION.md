@@ -16,7 +16,7 @@ The `SeatingAlgorithm` (located in `algo/core/algorithm/seating.py`) utilizes a 
 
 ## 🛡️ Constraint & Priority System
 
-The algorithm enforces **8 primary constraints** during the generation process.
+The algorithm enforces **9 primary constraints** during the generation process, with conditional application based on configuration.
 
 ### Paper Set Alternation (3-Tier Priority)
 To ensure examination integrity, paper sets alternate based on the following priority list:
@@ -26,6 +26,20 @@ To ensure examination integrity, paper sets alternate based on the following pri
 | **P1** | **Highest** | **Vertical Batch Check**: If the student immediately above belongs to the *same batch*, they MUST receive the alternate paper set. |
 | **P2** | **Medium** | **Horizontal Batch Check**: If the student to the left belongs to the *same batch*, they MUST receive the alternate paper set. |
 | **P3** | **Lowest** | **Standard Alternation**: If no same-batch adjacency is detected, apply standard checkerboard alternation (A → B → A). |
+
+### Adjacent Seating Control 🆕
+**New in v2.4**: For single-batch scenarios, administrators can optionally enable adjacent seating:
+- When `allow_adjacent_same_batch = true`, gap columns are NOT inserted
+- Same-batch students can sit horizontally adjacent
+- Paper set alternation (P1-P3) is still enforced
+- Only available when exactly one batch is selected
+
+### Branch Detection 🆕
+**New in v2.4**: Majority-based branch identification:
+- Samples up to 5 students from each batch
+- Extracts branch code from enrollment numbers
+- Uses most common branch (majority voting)
+- Handles inter-branch program students correctly
 
 ---
 
@@ -53,4 +67,4 @@ Every generated plan undergoes a final validation pass that checks for:
 - **Configuration Mismatches**: Validates that room dimensions (rows/cols) match the provided grid data.
 
 ---
-*Algorithm Specification: v2.3*
+*Algorithm Specification: v2.4 | Last Updated: February 2026*

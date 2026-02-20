@@ -50,6 +50,8 @@ class SeatingAlgorithm:
         # NEW: real enrollment numbers per batch.
         # Example: {1: ["BTCS24O1001", "BTCS24O1002"], 2: ["BTCD24O2001", ...]}
         batch_roll_numbers: Optional[Dict[int, List[str]]] = None,
+        # NEW: Allow adjacent seating for same batch (useful for single-batch scenarios)
+        allow_adjacent_same_batch: bool = False,
     ):
         """
         rows, cols, num_batches: as before
@@ -116,6 +118,8 @@ class SeatingAlgorithm:
         self.start_rolls = start_rolls or {}
         # NEW: per-batch real enrollment/roll strings
         self.batch_roll_numbers = batch_roll_numbers or {}
+        # NEW: Allow adjacent seating for same batch
+        self.allow_adjacent_same_batch = allow_adjacent_same_batch
         # zero-pad width for serial portion
         self.serial_width = max(0, serial_width)
         # serial_mode: 'per_batch' or 'global'
@@ -312,8 +316,8 @@ class SeatingAlgorithm:
             # Column-major assignment (Batch by Column)
             for col in range(self.cols):
                 # BLOCK-AWARE GAP: If only one batch is assigned, skip odd columns WITHIN each block
-                # to prevent same-batch horizontal neighbors. Isolation is relaxed across block boundaries.
-                if self.num_batches == 1:
+                # to prevent same-batch horizontal neighbors (unless allow_adjacent_same_batch is True)
+                if self.num_batches == 1 and not self.allow_adjacent_same_batch:
                     col_in_block = self._get_col_in_block(col)
                     if col_in_block % 2 != 0:
                         # This is a gap column within a block
@@ -462,56 +466,48 @@ class SeatingAlgorithm:
         return ((row + col) % self.num_batches) + 1
 
     def _calculate_paper_set(self, row: int, col: int, current_batch: int) -> PaperSet:
-        """Label-Centric paper-set calculation.
+        """Enhanced paper-set calculation with strict same-batch alternation.
         
-        Priority:
-          - Highest: Nearest student with SAME LABEL in the same column/row.
-          - Fallback: Checkerboard.
+        Priority (3-Tier System):
+          P1 (Highest): Vertical same-batch check - if student directly above is same batch, alternate
+          P2 (Medium): Horizontal same-batch check within SAME BLOCK - check all left neighbors in block
+          P3 (Lowest): Standard checkerboard alternation
           
-        Note: We ignore different-label neighbors if they conflict with same-label sequence,
-        as the user's requirements prioritize group-level integrity.
+        This ensures same-batch students NEVER have the same paper set when adjacent,
+        and within the same block horizontally.
         """
         current_label = self.batch_labels.get(current_batch, str(current_batch))
         
-        # 1. Vertical Logic: Check nearest student with SAME LABEL
-        v_pref = None
-        v_dist = 99
-        for r in range(row - 1, -1, -1):
-            prev = self.seating_plan[r][col]
-            if not prev or prev.is_broken: continue
-            if prev.roll_number:
-                prev_label = self.batch_labels.get(prev.batch, str(prev.batch))
-                if prev_label == current_label:
-                    v_pref = PaperSet.B if prev.paper_set == PaperSet.A else PaperSet.A
-                    v_dist = row - r
-                    break
-
-        # 2. Horizontal Logic: Check nearest student with SAME LABEL
-        h_pref = None
-        h_dist = 99
-        for c in range(col - 1, -1, -1):
-            prev = self.seating_plan[row][c]
-            if not prev or prev.is_broken: continue
-            if prev.roll_number:
-                prev_label = self.batch_labels.get(prev.batch, str(prev.batch))
-                if prev_label == current_label:
-                    h_pref = PaperSet.B if prev.paper_set == PaperSet.A else PaperSet.A
-                    h_dist = col - c
-                    break
-
-        # Resolve conflicts: favor horizontal if both are physically close (dist <= 2)
-        # to ensure the row remains 'clean' as requested.
-        if v_pref and h_pref:
-            if v_pref == h_pref:
-                return v_pref
-            # Favor horizontal to prevent the "same sets in row" issue
-            return h_pref if h_dist <= 2 else v_pref
-
-        # Fallback to single preference OR checkerboard
-        if v_pref: return v_pref
-        if h_pref: return h_pref
+        # P1: Check IMMEDIATE vertical neighbor (row-1, same col)
+        if row > 0:
+            above_seat = self.seating_plan[row - 1][col]
+            # Only check if seat exists, is not broken, and has a student assigned
+            if above_seat and not above_seat.is_broken and above_seat.roll_number:
+                above_label = self.batch_labels.get(above_seat.batch, str(above_seat.batch))
+                # If same batch, MUST alternate
+                if above_label == current_label:
+                    return PaperSet.B if above_seat.paper_set == PaperSet.A else PaperSet.A
         
-        return PaperSet.A if row % 2 == 0 else PaperSet.B
+        # P2: Check ALL horizontal neighbors within the SAME BLOCK (left side only)
+        # This ensures same-batch students in the same row within a block have different sets
+        current_block = self._get_block_index(col)
+        block_start, block_end = self.block_ranges[current_block] if current_block < len(self.block_ranges) else (0, self.cols - 1)
+        
+        # Scan from current column backwards to the start of the block
+        for c in range(col - 1, block_start - 1, -1):
+            if c < 0:
+                break
+            left_seat = self.seating_plan[row][c]
+            # Only check if seat exists, is not broken, and has a student assigned
+            if left_seat and not left_seat.is_broken and left_seat.roll_number:
+                left_label = self.batch_labels.get(left_seat.batch, str(left_seat.batch))
+                # If same batch, MUST alternate from this neighbor
+                if left_label == current_label:
+                    return PaperSet.B if left_seat.paper_set == PaperSet.A else PaperSet.A
+        
+        # P3: Standard checkerboard alternation (fallback)
+        # Use (row + col) % 2 for true checkerboard pattern
+        return PaperSet.A if (row + col) % 2 == 0 else PaperSet.B
 
     # ------------------ validation helpers (unchanged) ------------------ #
 
@@ -682,9 +678,9 @@ class SeatingAlgorithm:
         constraints.append(
             {
                 "name": "Batch Isolation",
-                "description": "No students of same batch in adjacent seats (horizontal/vertical)",
-                "applied": True,
-                "satisfied": self._verify_no_adjacent_batches(),
+                "description": "No students of same batch in adjacent seats (horizontal/vertical)" if not self.allow_adjacent_same_batch else "Adjacent seating allowed for same batch",
+                "applied": not self.allow_adjacent_same_batch,
+                "satisfied": self._verify_no_adjacent_batches() if not self.allow_adjacent_same_batch else True,
             }
         )
 

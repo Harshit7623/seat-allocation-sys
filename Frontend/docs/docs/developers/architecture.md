@@ -425,5 +425,5 @@ The platform employs a **Glassmorphism** design language to create a premium, mo
 
 ---
 
-**Version**: 2.3  
-**Last Updated**: January 24, 2026
+**Version**: 2.4  
+**Last Updated**: February 9, 2026

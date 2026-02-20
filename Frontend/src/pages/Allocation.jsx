@@ -112,6 +112,7 @@ const AllocationPage = ({ showToast }) => {
   // Layout options
   const [batchByColumn, setBatchByColumn] = useState(true);
   const [randomizeColumn, setRandomizeColumn] = useState(false);
+  const [allowAdjacentSeating, setAllowAdjacentSeating] = useState(false);
   const [optimizeRoom, setOptimizeRoom] = useState(false);
   const [isOptModalOpen, setIsOptModalOpen] = useState(false);
   const [batchSuccessors, setBatchSuccessors] = useState({});
@@ -445,6 +446,7 @@ const AllocationPage = ({ showToast }) => {
       num_batches: allPayloadBatches.length, // Includes extras
       batch_by_column: batchByColumn,
       randomize_column: randomizeColumn,
+      allow_adjacent_same_batch: allowAdjacentSeating,
       optimize_stgy: optimizeRoom,
       batch_successors: payloadSuccessors, // <--- TRANSORMED
       use_demo_db: true,
@@ -1284,6 +1286,29 @@ const AllocationPage = ({ showToast }) => {
                     <span>Randomize Within Column</span>
                   </FeatureTooltip>
                 </label>
+                
+                {/* Adjacent Seating Option - Only show when single batch selected */}
+                {selectedBatchIds.filter(id => id !== null).length === 1 && (
+                  <label className="flex items-center gap-3 text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer hover:text-orange-600 dark:hover:text-orange-400 transition-colors">
+                    <input 
+                      type="checkbox" 
+                      checked={allowAdjacentSeating} 
+                      onChange={e => setAllowAdjacentSeating(e.target.checked)} 
+                      className="w-5 h-5 rounded border-2 border-gray-300 text-orange-600 focus:ring-2 focus:ring-orange-500"
+                    />
+                    <Users size={16} className="text-orange-500" />
+                    <FeatureTooltip
+                      title="Allow Adjacent Seating"
+                      description="Allows students from the same batch to sit next to each other. Paper set alternation and other constraints are still enforced. Only available for single-batch allocations."
+                    >
+                      <span>Allow Adjacent Seating</span>
+                    </FeatureTooltip>
+                    <span className="text-[10px] uppercase font-black bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded">
+                      Single Batch
+                    </span>
+                  </label>
+                )}
+                
                 <label className="flex items-center gap-3 text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer hover:text-orange-600 dark:hover:text-orange-400 transition-colors">
                   <input 
                     type="checkbox" 

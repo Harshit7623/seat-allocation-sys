@@ -111,9 +111,9 @@ def create_attendance_pdf(filename, student_list, batch_label, metadata, extract
     
     degree = extracted_info.get('degree', 'B.Tech')
     
-    # Degree, branch, batch, year line - Use CURRENT YEAR for display
+    # Degree, branch, batch, year line - removed current year display
     story.append(Paragraph(
-        f"<b>{degree} ({expanded_branch}-{year_suffix}yr), Batch - {joining_year}, Year {current_year}</b>", 
+        f"<b>{degree} ({expanded_branch}-{year_suffix}yr), Batch - {joining_year}</b>", 
         header_style
     ))
     

@@ -77,6 +77,47 @@ class CacheManager:
         
         # Fallback if no pattern matches
         return {"degree": "B.Tech", "branch": "N/A", "joining_year": "2024"}
+    
+    def _determine_batch_branch(self, students, sample_size=5):
+        """
+        Determine batch branch by sampling multiple students and using majority vote.
+        This handles inter-branch program students correctly.
+        
+        Args:
+            students: List of student dicts with 'roll_number' key
+            sample_size: Number of students to sample (default: 5)
+        
+        Returns:
+            dict: Academic info with majority branch code
+        """
+        from collections import Counter
+        
+        if not students:
+            return {"degree": "B.Tech", "branch": "N/A", "joining_year": "2024"}
+        
+        # Sample students (take first N to avoid randomness and ensure consistency)
+        sample = students[:min(sample_size, len(students))]
+        
+        # Extract branch from each sample
+        branches = []
+        all_info = []
+        for student in sample:
+            info = self._parse_enrollment(student.get('roll_number', ''))
+            branches.append(info.get('branch', 'N/A'))
+            all_info.append(info)
+        
+        # Find majority branch using Counter
+        if branches:
+            branch_counts = Counter(branches)
+            majority_branch = branch_counts.most_common(1)[0][0]
+            
+            # Use the info from the first student with the majority branch
+            for info in all_info:
+                if info.get('branch') == majority_branch:
+                    return info
+        
+        # Fallback: use first student's info
+        return all_info[0] if all_info else {"degree": "B.Tech", "branch": "N/A", "joining_year": "2024"}
 
     def save_or_update(self, plan_id, input_config, output_data, room_no="N/A"):
         """
@@ -92,23 +133,28 @@ class CacheManager:
                      if seat and not seat.get('is_broken') and not seat.get('is_unallocated')]
 
         # Create the Room-specific batch structure
-        room_batches = {}
-        # We'll use this to compare if seating is identical (Position + Roll Number)
-        current_fingerprint = [] 
-
+        # STEP 1: Collect all students per batch first
+        batch_students = {}  # Temporary: batch_label -> list of students
+        current_fingerprint = []  # For deduplication check
+        
         for student in all_seats:
             label = student.get('batch_label', 'Unknown')
-            if label not in room_batches:
-                academic_info = self._parse_enrollment(student.get('roll_number'))
-                room_batches[label] = {"info": academic_info, "students": []}
+            if label not in batch_students:
+                batch_students[label] = []
             
             student['room_no'] = room_no
-            room_batches[label]["students"].append(student)
+            batch_students[label].append(student)
             
             # Create a unique fingerprint of this seat (Pos + Roll)
             current_fingerprint.append(f"{student.get('position')}:{student.get('roll_number')}")
+        
+        # STEP 2: Determine branch info using majority voting (3-5 students)
+        room_batches = {}
+        for label, students in batch_students.items():
+            academic_info = self._determine_batch_branch(students, sample_size=5)
+            room_batches[label] = {"info": academic_info, "students": students}
 
-        current_fingerprint.sort() # Sort to ensure consistent comparison
+        current_fingerprint.sort()  # Sort to ensure consistent comparison
 
         # 4. Prepare the entry for this room
         current_room_entry = {

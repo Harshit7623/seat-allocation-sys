@@ -38,6 +38,37 @@ def init_database():
         )
     ''')
     
+    
+    # Migration: Add missing columns if they don't exist
+    try:
+        cursor.execute("PRAGMA table_info(user_templates)")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        # List of columns that should exist
+        required_columns = {
+            'current_year': ('INTEGER', '2024'),
+            'attendance_dept_name': ('TEXT', "'Computer Science and Engineering'"),
+            'attendance_year': ('INTEGER', '2024'),
+            'attendance_exam_heading': ('TEXT', "'SESSIONAL EXAMINATION'"),
+            'attendance_banner_path': ('TEXT', "''")
+        }
+        
+        migrations_applied = []
+        for col_name, (col_type, default_val) in required_columns.items():
+            if col_name not in columns:
+                print(f"🔧 Migrating database: Adding {col_name} column...")
+                cursor.execute(f'''
+                    ALTER TABLE user_templates 
+                    ADD COLUMN {col_name} {col_type} DEFAULT {default_val}
+                ''')
+                migrations_applied.append(col_name)
+        
+        if migrations_applied:
+            print(f"✅ Migration complete: Added columns: {', '.join(migrations_applied)}")
+        
+    except Exception as e:
+        print(f"⚠️ Migration check warning: {e}")
+    
     system_banner_path = os.path.join(BASE_DIR, "data", "banner.png")
     
     # Insert system default template if not exists
