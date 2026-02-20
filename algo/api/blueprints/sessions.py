@@ -50,6 +50,37 @@ def _get_user_id():
     raise ValueError("Authentication required")
 
 
+def _verify_session_owner(session_id: int, user_id: int) -> bool:
+    """
+    Verify that the user owns the specified session.
+    STRICT: Only allows access if user_id matches. No ADMIN bypass.
+    
+    Args:
+        session_id: The session ID to check
+        user_id: The user ID to verify against
+        
+    Returns:
+        True if access is allowed, False otherwise
+    """
+    from algo.database.queries.session_queries import SessionQueries
+    
+    session = SessionQueries.get_session_by_id(session_id)
+    if not session:
+        return False
+    
+    owner_id = session.get('user_id')
+    
+    # Allow if user owns the session
+    if owner_id == user_id:
+        return True
+    
+    # Allow if session is unassigned (NULL user_id) - legacy data
+    if owner_id is None:
+        return True
+    
+    return False
+
+
 def _get_session_stats(session_id):
     """Get allocation statistics for a session"""
     conn = _get_conn()
@@ -163,7 +194,8 @@ def createSession(user_id=None, plan_id=None, upload_ids=None):
         conn = _get_conn()
         cursor = conn.cursor()
         
-        user_id = user_id or 1
+        if not user_id:
+            return {'success': False, 'error': 'user_id is required'}
         upload_ids = upload_ids or []
         
         # Generate plan_id if not provided
@@ -302,14 +334,16 @@ def getActiveSession(user_id=None):
         conn = _get_conn()
         cursor = conn.cursor()
         
-        user_id = user_id or 1
+        if not user_id:
+            return None
         
+        # STRICT: Only get this user's active sessions
         cursor.execute("""
             SELECT session_id, plan_id, total_students, allocated_count,
                    status, created_at, last_activity, user_id
             FROM allocation_sessions 
-            WHERE status = 'active'
-            ORDER BY CASE WHEN user_id = ? THEN 0 ELSE 1 END, last_activity DESC 
+            WHERE status = 'active' AND user_id = ?
+            ORDER BY last_activity DESC 
             LIMIT 1
         """, (user_id,))
         
@@ -389,6 +423,10 @@ def get_active_session():
 def get_session(session_id):
     """Get specific session details"""
     try:
+        user_id = _get_user_id()
+        if not _verify_session_owner(session_id, user_id):
+            return jsonify({"success": False, "error": "Access denied - you do not own this session"}), 403
+        
         session_dict = SessionService.get_session_with_rooms(session_id)
         
         if not session_dict:
@@ -450,6 +488,10 @@ def start_session():
 @token_required
 def delete_session_by_id(session_id):
     """Delete session by ID - DELETE /api/sessions/<id>"""
+    user_id = _get_user_id()
+    if not _verify_session_owner(session_id, user_id):
+        return jsonify({"success": False, "error": "Access denied - you do not own this session"}), 403
+    
     result = deleteSession(session_id, hard_delete=True)
     status = 200 if result['success'] else (404 if 'not found' in result.get('error', '').lower() else 500)
     return jsonify(result), status
@@ -462,6 +504,10 @@ def delete_session_by_id(session_id):
 @token_required
 def delete_session_explicit(session_id):
     """Delete session - DELETE/POST /api/sessions/<id>/delete"""
+    user_id = _get_user_id()
+    if not _verify_session_owner(session_id, user_id):
+        return jsonify({"success": False, "error": "Access denied - you do not own this session"}), 403
+    
     result = deleteSession(session_id, hard_delete=True)
     status = 200 if result['success'] else (404 if 'not found' in result.get('error', '').lower() else 500)
     return jsonify(result), status
@@ -474,6 +520,10 @@ def delete_session_explicit(session_id):
 @token_required
 def expire_session(session_id):
     """Soft delete - just mark as expired (uses SessionService)"""
+    user_id = _get_user_id()
+    if not _verify_session_owner(session_id, user_id):
+        return jsonify({"success": False, "error": "Access denied - you do not own this session"}), 403
+    
     result = SessionService.delete_session(session_id, hard_delete=False)
     status = 200 if result['success'] else (404 if 'not found' in result.get('error', '').lower() else 500)
     return jsonify(result), status
@@ -487,6 +537,10 @@ def expire_session(session_id):
 def get_session_uploads(session_id):
     """Get all uploads/batches for a session (uses SessionService)"""
     try:
+        user_id = _get_user_id()
+        if not _verify_session_owner(session_id, user_id):
+            return jsonify({"success": False, "error": "Access denied - you do not own this session"}), 403
+        
         result = SessionService.get_session_uploads(session_id)
         status = 200 if result.get('success') else 500
         return jsonify(result), status
@@ -503,6 +557,10 @@ def get_session_uploads(session_id):
 def get_session_statistics(session_id):
     """Get allocation statistics for a session (uses SessionService)"""
     try:
+        user_id = _get_user_id()
+        if not _verify_session_owner(session_id, user_id):
+            return jsonify({"success": False, "error": "Access denied - you do not own this session"}), 403
+        
         result = SessionService.get_session_statistics(session_id)
         
         if not result.get('success'):
@@ -524,6 +582,10 @@ def get_session_statistics(session_id):
 def get_session_pending(session_id):
     """Get unallocated students for a session"""
     try:
+        user_id = _get_user_id()
+        if not _verify_session_owner(session_id, user_id):
+            return jsonify({"success": False, "error": "Access denied - you do not own this session"}), 403
+        
         conn = _get_conn()
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
@@ -559,6 +621,10 @@ def get_session_pending(session_id):
 @token_required
 def refresh_session_totals(session_id):
     """Recalculate total_students and allocated_count (uses SessionService)"""
+    user_id = _get_user_id()
+    if not _verify_session_owner(session_id, user_id):
+        return jsonify({"success": False, "error": "Access denied - you do not own this session"}), 403
+    
     result = SessionService.update_stats(session_id)
     status = 200 if result['success'] else 500
     return jsonify(result), status
@@ -570,11 +636,12 @@ def refresh_session_totals(session_id):
 @session_bp.route('/force-new', methods=['POST'])
 @token_required
 def force_new_session():
-    """Force-expire ALL active sessions"""
+    """Force-expire current user's active sessions only"""
     try:
-        result = SessionService.expire_all_active()
+        user_id = _get_user_id()
+        result = SessionService.expire_all_active(user_id=user_id)
         
-        print(f"⚠️ Force-expired {result.get('expired_count', 0)} active session(s)")
+        print(f"⚠️ Force-expired {result.get('expired_count', 0)} active session(s) for user {user_id}")
         
         return jsonify(result), 200 if result.get('success') else 500
         
@@ -614,6 +681,10 @@ def claim_orphaned_sessions():
 def heartbeat(session_id):
     """Update session activity timestamp"""
     try:
+        user_id = _get_user_id()
+        if not _verify_session_owner(session_id, user_id):
+            return jsonify({"success": False, "error": "Access denied - you do not own this session"}), 403
+        
         conn = _get_conn()
         cursor = conn.cursor()
         
@@ -639,6 +710,10 @@ def heartbeat(session_id):
 def finalize_session(session_id):
     """Mark session as completed"""
     try:
+        user_id = _get_user_id()
+        if not _verify_session_owner(session_id, user_id):
+            return jsonify({"success": False, "error": "Access denied - you do not own this session"}), 403
+        
         conn = _get_conn()
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
@@ -714,6 +789,10 @@ def finalize_session(session_id):
 def allocate_room_in_session(session_id):
     """Save allocation for ONE room (uses AllocationService)"""
     try:
+        user_id = _get_user_id()
+        if not _verify_session_owner(session_id, user_id):
+            return jsonify({"success": False, "error": "Access denied - you do not own this session"}), 403
+        
         data = request.get_json() or {}
         classroom_id = data.get('classroom_id')
         seating_data = data.get('seating_data')
@@ -750,6 +829,10 @@ def allocate_room_in_session(session_id):
 def undo_last_action(session_id):
     """Undo last room allocation (uses AllocationService)"""
     try:
+        user_id = _get_user_id()
+        if not _verify_session_owner(session_id, user_id):
+            return jsonify({"success": False, "error": "Access denied - you do not own this session"}), 403
+        
         result = AllocationService.undo_last_allocation(session_id)
         
         if result.get('success'):

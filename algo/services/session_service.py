@@ -92,26 +92,33 @@ class SessionService:
             logger.error(f"Error deleting session {session_id}: {e}")
             return {'success': False, 'error': str(e)}
 
+    # Session timeout configuration
+    SESSION_INACTIVE_TIMEOUT_MINUTES = 120  # 2 hours - sessions inactive longer than this are considered stale
+    SESSION_ABANDONED_TIMEOUT_MINUTES = 30   # 30 minutes - for auto-expiring during session resume
+
     @staticmethod
     def check_expiry(session_id: int) -> Tuple[bool, str]:
-        """Check if session should be expired logic"""
-        # Logic copied from original app.py
+        """Check if session should be expired based on inactivity"""
         session = SessionQueries.get_session_by_id(session_id)
         if not session:
             return True, "Session not found"
         
-        if session['status'] in ['completed', 'archived']:
-            return False, "Session is completed/archived"
+        if session['status'] in ['completed', 'archived', 'expired']:
+            return False, f"Session is {session['status']}"
             
         # Check last activity
-        # This part requires access to user_activity or session last_activity
-        # Assuming last_activity on session is updated
         last_activity_str = session.get('last_activity')
         if last_activity_str:
-            last_activity = datetime.datetime.fromisoformat(last_activity_str)
-            inactive_duration = datetime.datetime.now() - last_activity
-            if inactive_duration > datetime.timedelta(minutes=30):
-                return True, f"Inactive for {int(inactive_duration.total_seconds() / 60)} minutes"
+            try:
+                last_activity = datetime.datetime.fromisoformat(str(last_activity_str).replace('Z', '+00:00'))
+                last_activity = last_activity.replace(tzinfo=None)  # Make timezone naive
+                inactive_duration = datetime.datetime.now() - last_activity
+                inactive_minutes = int(inactive_duration.total_seconds() / 60)
+                
+                if inactive_minutes > SessionService.SESSION_INACTIVE_TIMEOUT_MINUTES:
+                    return True, f"Inactive for {inactive_minutes} minutes (threshold: {SessionService.SESSION_INACTIVE_TIMEOUT_MINUTES})"
+            except Exception as e:
+                logger.warning(f"Error parsing last_activity: {e}")
         
         return False, "Active"
 
@@ -222,6 +229,47 @@ class SessionService:
             }
         except Exception as e:
             logger.error(f"Error expiring all active sessions: {e}")
+            return {'success': False, 'error': str(e)}
+
+    @staticmethod
+    def auto_expire_stale_sessions() -> Dict:
+        """
+        Automatically expire sessions that have been inactive longer than the timeout.
+        
+        This should be called periodically (e.g., on app startup or via cron).
+        
+        Returns:
+            Dict with success status and count of expired sessions
+        """
+        try:
+            from algo.database.db import get_db
+            db = get_db()
+            
+            # Calculate threshold time
+            threshold_minutes = SessionService.SESSION_INACTIVE_TIMEOUT_MINUTES
+            
+            # Expire sessions inactive longer than threshold
+            cursor = db.execute("""
+                UPDATE allocation_sessions 
+                SET status = 'expired', last_activity = CURRENT_TIMESTAMP
+                WHERE status = 'active' 
+                AND last_activity IS NOT NULL
+                AND datetime(last_activity) < datetime('now', ? || ' minutes')
+            """, (f'-{threshold_minutes}',))
+            
+            expired_count = cursor.rowcount
+            db.commit()
+            
+            if expired_count > 0:
+                logger.info(f"⏰ Auto-expired {expired_count} stale session(s) (inactive > {threshold_minutes} min)")
+            
+            return {
+                'success': True,
+                'expired_count': expired_count,
+                'threshold_minutes': threshold_minutes
+            }
+        except Exception as e:
+            logger.error(f"Error auto-expiring stale sessions: {e}")
             return {'success': False, 'error': str(e)}
 
     @staticmethod
@@ -338,12 +386,12 @@ class SessionService:
         db = get_db()
         
         try:
-            # Check for existing active session
+            # STRICT: Only check this user's active sessions (no cross-user leakage)
             cursor = db.execute("""
                 SELECT session_id, last_activity, allocated_count, total_students, plan_id, user_id
                 FROM allocation_sessions 
-                WHERE status = 'active'
-                ORDER BY CASE WHEN user_id = ? THEN 0 ELSE 1 END, last_activity DESC
+                WHERE status = 'active' AND user_id = ?
+                ORDER BY last_activity DESC
                 LIMIT 1
             """, (user_id,))
             existing = cursor.fetchone()
@@ -355,13 +403,13 @@ class SessionService:
                 total = existing['total_students']
                 plan_id = existing['plan_id']
                 
-                # Check if abandoned (>30 min inactive)
+                # Check if abandoned (using class constant)
                 is_abandoned = False
                 if last_activity:
                     try:
                         last_active = datetime.datetime.fromisoformat(str(last_activity).replace('Z', '+00:00'))
                         inactive_duration = datetime.datetime.now() - last_active.replace(tzinfo=None)
-                        is_abandoned = inactive_duration > datetime.timedelta(minutes=30)
+                        is_abandoned = inactive_duration > datetime.timedelta(minutes=SessionService.SESSION_ABANDONED_TIMEOUT_MINUTES)
                     except Exception as e:
                         logger.warning(f"Date parse warning: {e}")
                 

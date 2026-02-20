@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { getToken } from '../utils/tokenStorage';
 import SplitText from '../components/SplitText';
 import { 
   Upload, Layout, Monitor, Clock, ArrowRight, Loader2, AlertCircle, 
@@ -11,6 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const CreatePlan = ({ showToast }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -27,12 +30,24 @@ const CreatePlan = ({ showToast }) => {
     fetchRecentPlans();
   }, []);
 
+  // Re-fetch when user changes (account switch)
+  const userIdentity = user?.email || user?.id;
+  useEffect(() => {
+    if (userIdentity) {
+      setPlans([]);
+      setError(null);
+      setViewingPlan(null);
+      setPlanDetails(null);
+      fetchRecentPlans();
+    }
+  }, [userIdentity]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const fetchRecentPlans = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch('/api/plans/recent', {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
@@ -80,7 +95,7 @@ const CreatePlan = ({ showToast }) => {
     };
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       
       // Try to fetch additional stats (rooms breakdown, etc.)
       const statsRes = await fetch(`/api/sessions/${plan.session_id}/stats`, {
@@ -141,7 +156,7 @@ const CreatePlan = ({ showToast }) => {
   const exportRoomPDF = async (plan, roomName) => {
     setExportLoading(roomName);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const timestamp = Date.now();
       
       console.log(`📄 Exporting PDF for room: ${roomName} in plan: ${plan.plan_id}`);
@@ -201,7 +216,7 @@ const CreatePlan = ({ showToast }) => {
   const exportAllRoomsPDF = async (plan) => {
     setExportLoading('all');
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const timestamp = Date.now();
       
       console.log(`📄 Exporting combined PDF for plan: ${plan.plan_id}`);

@@ -1,9 +1,12 @@
-import React from 'react';
+﻿import React from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { getToken } from '../utils/tokenStorage';
 import SplitText from '../components/SplitText';
 import { AlertCircle, Lightbulb, Upload, Send, CheckCircle, Clock, AlertTriangle, Loader2, X, Eye, Download } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const FeedbackPage = ({ showToast }) => {
+    const { user } = useAuth();
     // State management for form fields
     const [issueType, setIssueType] = React.useState('Functionality Issue'); 
     const [priority, setPriority] = React.useState('Medium Priority');
@@ -48,7 +51,7 @@ const FeedbackPage = ({ showToast }) => {
     ];
 
     const getAuthToken = () => {
-        return localStorage.getItem('token') || sessionStorage.getItem('token');
+        return getToken();
     };
 
     const fetchFeedbackHistory = async () => {
@@ -82,6 +85,18 @@ const FeedbackPage = ({ showToast }) => {
             fetchFeedbackHistory();
         }
     }, [activeTab]);
+
+    // Re-fetch when user changes (account switch)
+    const userIdentity = user?.email || user?.id;
+    React.useEffect(() => {
+        if (userIdentity) {
+            setFeedbackHistory([]);
+            setSelectedFeedback(null);
+            if (activeTab === 'history') {
+                fetchFeedbackHistory();
+            }
+        }
+    }, [userIdentity]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleSubmit = async (e) => {
         e.preventDefault();

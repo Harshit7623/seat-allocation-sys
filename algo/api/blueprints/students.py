@@ -55,7 +55,9 @@ def upload_students():
         )
         
         # Store in temp cache
-        user_id = getattr(request, 'user_id', 1)
+        user_id = getattr(request, 'user_id', None)
+        if not user_id:
+            return jsonify({"error": "Authentication required"}), 401
         temp_dir = os.path.join('algo', 'cache', 'temp_uploads', str(user_id))
         os.makedirs(temp_dir, exist_ok=True)
         
@@ -107,7 +109,19 @@ def commit_upload():
         if not batch_id:
             return jsonify({"error": "batch_id required"}), 400
         
-        user_id = getattr(request, 'user_id', 1)
+        user_id = getattr(request, 'user_id', None)
+        if not user_id:
+            return jsonify({"error": "Authentication required"}), 401
+        
+        # Verify session ownership if session_id provided
+        if session_id:
+            conn_check = _get_conn()
+            cur_check = conn_check.cursor()
+            cur_check.execute("SELECT user_id FROM allocation_sessions WHERE session_id = ?", (session_id,))
+            row = cur_check.fetchone()
+            conn_check.close()
+            if row and row[0] is not None and row[0] != user_id:
+                return jsonify({"error": "Access denied - you do not own this session"}), 403
             
         # Load from temp cache
         temp_file = os.path.join('algo', 'cache', 'temp_uploads', str(user_id), f"{batch_id}.json")
