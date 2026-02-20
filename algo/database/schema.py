@@ -21,7 +21,7 @@ def ensure_demo_db():
 
     try:
         # ====================================================================
-        # 1. USER ACTIVITY TABLE
+        # 1. USER ACTIVITY TABLE (Last activity tracking)
         # ====================================================================
         cur.execute("""
             CREATE TABLE IF NOT EXISTS user_activity (
@@ -30,6 +30,27 @@ def ensure_demo_db():
                 last_endpoint TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
+        """)
+        
+        # ====================================================================
+        # 1b. USER ACTIVITY LOG TABLE (Full activity history with 7-day retention)
+        # ====================================================================
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS user_activity_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                details TEXT,
+                endpoint TEXT,
+                ip_address TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+        """)
+        
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_activity_log_user_date 
+            ON user_activity_log(user_id, created_at DESC);
         """)
 
         # ====================================================================
@@ -104,20 +125,35 @@ def ensure_demo_db():
         """)
 
         # ====================================================================
-        # 6. CLASSROOMS TABLE
+        # 6. CLASSROOMS TABLE (WITH USER ISOLATION)
         # ====================================================================
         cur.execute("""
             CREATE TABLE IF NOT EXISTS classrooms (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
+                user_id INTEGER DEFAULT NULL,
+                name TEXT NOT NULL,
                 rows INTEGER NOT NULL CHECK(rows > 0 AND rows <= 50),
                 cols INTEGER NOT NULL CHECK(cols > 0 AND cols <= 50),
                 broken_seats TEXT DEFAULT '',
                 block_width INTEGER DEFAULT 1 CHECK(block_width > 0),
                 block_structure TEXT DEFAULT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
+        """)
+        
+        # Add user_id column if it doesn't exist (migration for existing DB)
+        try:
+            cur.execute("ALTER TABLE classrooms ADD COLUMN user_id INTEGER DEFAULT NULL")
+            logger.info("✅ Added user_id column to classrooms table")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        # Create unique index for user_id + name (allows same name for different users)
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_classrooms_user_name 
+            ON classrooms(user_id, name) WHERE user_id IS NOT NULL;
         """)
 
         # ====================================================================

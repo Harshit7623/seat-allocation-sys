@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { getToken } from '../utils/tokenStorage';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Settings, Download, Layout, AlertTriangle, CheckCircle, 
@@ -90,7 +91,7 @@ const ManualAllocation = ({ showToast }) => {
         };
         
         try {
-            const token = localStorage.getItem('token');
+            const token = getToken();
             const response = await fetch('/api/manual-generate-seating', {
                 method: 'POST',
                 headers: { 
@@ -114,7 +115,7 @@ const ManualAllocation = ({ showToast }) => {
     const handleDownloadPdf = async () => {
         setIsPdfGenerating(true);
         try {
-            const token = localStorage.getItem('token');
+            const token = getToken();
             const response = await fetch('api/generate-pdf', {
                 method: 'POST',
                 headers: { 

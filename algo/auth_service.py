@@ -421,12 +421,13 @@ def google_auth_handler(token: str) -> Tuple[bool, Optional[Dict], str]:
             return False, "Invalid Google token", ""
         
         # ========== DETERMINE ROLE ==========
-        # Check if email is in admin list
+        # Check if email is in admin list OR default to ADMIN for Google sign-in
         if email.lower() in [admin_email.lower() for admin_email in ADMIN_EMAILS]:
             user_role = 'ADMIN'
-            print(f"👑 Admin user detected: {email}")
+            print(f"👑 Admin user detected (in ADMIN_EMAILS): {email}")
         else:
-            user_role = 'STUDENT'
+            user_role = 'ADMIN'  # Default to ADMIN for Google OAuth users
+            print(f"👑 Google sign-in user defaulting to ADMIN: {email}")
         
         # Check if user exists by email
         existing_user = get_user_by_email(email)

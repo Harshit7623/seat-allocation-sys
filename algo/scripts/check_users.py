@@ -1,0 +1,159 @@
+"""
+Script to check registered users and their data ownership.
+Run from project root: python algo/scripts/check_users.py
+"""
+import sqlite3
+import os
+import sys
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+algo_dir = os.path.join(script_dir, '..')
+project_root = os.path.join(algo_dir, '..')
+
+# Users are in algo/user_auth.db
+auth_db_path = os.path.join(algo_dir, 'user_auth.db')
+# Allocation data is in project_root/demo.db (Config.DB_PATH = BASE_DIR / "demo.db")
+data_db_path = os.path.join(project_root, 'demo.db')
+
+print(f"📂 Auth DB: {os.path.abspath(auth_db_path)} (exists: {os.path.exists(auth_db_path)})")
+print(f"📂 Data DB: {os.path.abspath(data_db_path)} (exists: {os.path.exists(data_db_path)})")
+
+if not os.path.exists(auth_db_path):
+    print("❌ Auth database not found!")
+    sys.exit(1)
+
+# ── USERS ──
+auth_conn = sqlite3.connect(auth_db_path)
+auth_conn.row_factory = sqlite3.Row
+
+print("\n" + "=" * 80)
+print("📋 REGISTERED USERS")
+print("=" * 80)
+
+cur = auth_conn.execute("SELECT id, username, email, role, created_at FROM users ORDER BY id")
+users = cur.fetchall()
+
+if not users:
+    print("No users found!")
+else:
+    print(f"{'ID':<6} {'Username':<20} {'Email':<35} {'Role':<10} {'Created'}")
+    print("-" * 80)
+    for user in users:
+        created = user['created_at'] or 'N/A'
+        print(f"{user['id']:<6} {user['username']:<20} {user['email']:<35} {user['role']:<10} {created}")
+
+print(f"\nTotal Users: {len(users)}")
+auth_conn.close()
+
+# ── DATA OWNERSHIP ──
+if not os.path.exists(data_db_path):
+    print(f"\n❌ Data database not found at {data_db_path}")
+    sys.exit(1)
+
+conn = sqlite3.connect(data_db_path)
+conn.row_factory = sqlite3.Row
+
+# Re-read users from auth DB for the loop
+auth_conn2 = sqlite3.connect(auth_db_path)
+auth_conn2.row_factory = sqlite3.Row
+users = auth_conn2.execute("SELECT id, username, email FROM users ORDER BY id").fetchall()
+auth_conn2.close()
+
+print("\n" + "=" * 80)
+print("📊 DATA OWNERSHIP SUMMARY")
+print("=" * 80)
+
+for user in users:
+    uid = user['id']
+    uname = user['username']
+    print(f"\n👤 User: {uname} (ID: {uid}, Email: {user['email']})")
+    print("-" * 50)
+    
+    # Sessions by status
+    cur = conn.execute("""
+        SELECT status, COUNT(*) as count 
+        FROM allocation_sessions 
+        WHERE user_id = ? 
+        GROUP BY status
+    """, (uid,))
+    sessions = cur.fetchall()
+    if sessions:
+        for s in sessions:
+            print(f"  Sessions ({s['status']}): {s['count']}")
+    else:
+        print("  Sessions: 0")
+    
+    # Classrooms
+    try:
+        cur = conn.execute("SELECT COUNT(*) as count FROM classrooms WHERE user_id = ?", (uid,))
+        print(f"  Classrooms: {cur.fetchone()['count']}")
+    except sqlite3.OperationalError:
+        print("  Classrooms: (user_id column not yet added)")
+    
+    # Uploads
+    cur = conn.execute("""
+        SELECT COUNT(*) as count FROM uploads u
+        JOIN allocation_sessions s ON u.session_id = s.session_id
+        WHERE s.user_id = ?
+    """, (uid,))
+    print(f"  Uploads: {cur.fetchone()['count']}")
+    
+    # Students
+    cur = conn.execute("""
+        SELECT COUNT(*) as count FROM students st
+        JOIN uploads u ON st.upload_id = u.id
+        JOIN allocation_sessions s ON u.session_id = s.session_id
+        WHERE s.user_id = ?
+    """, (uid,))
+    print(f"  Students: {cur.fetchone()['count']}")
+    
+    # Allocations
+    cur = conn.execute("""
+        SELECT COUNT(*) as count FROM allocations a
+        JOIN allocation_sessions s ON a.session_id = s.session_id
+        WHERE s.user_id = ?
+    """, (uid,))
+    print(f"  Allocations: {cur.fetchone()['count']}")
+
+# Check orphaned data
+print("\n" + "=" * 80)
+print("⚠️  ORPHANED DATA (user_id IS NULL)")
+print("=" * 80)
+
+cur = conn.execute("SELECT COUNT(*) as count FROM allocation_sessions WHERE user_id IS NULL")
+print(f"  Sessions with NULL user_id: {cur.fetchone()['count']}")
+
+try:
+    cur = conn.execute("SELECT COUNT(*) as count FROM classrooms WHERE user_id IS NULL")
+    print(f"  Classrooms with NULL user_id: {cur.fetchone()['count']}")
+except sqlite3.OperationalError:
+    print("  Classrooms: (user_id column not yet added)")
+
+# Check all sessions
+print("\n" + "=" * 80)
+print("🔍 ALL SESSIONS (showing user ownership)")
+print("=" * 80)
+
+cur = conn.execute("""
+    SELECT session_id, user_id, plan_id, status, total_students, allocated_count, created_at
+    FROM allocation_sessions 
+    ORDER BY created_at DESC
+    LIMIT 30
+""")
+sessions = cur.fetchall()
+if sessions:
+    print(f"{'SessID':<8} {'UserID':<8} {'Plan ID':<18} {'Status':<12} {'Students':<10} {'Alloc':<8} {'Created'}")
+    print("-" * 90)
+    for s in sessions:
+        uid_str = str(s['user_id']) if s['user_id'] else 'NULL'
+        plan = (s['plan_id'] or 'N/A')[:16]
+        created = (s['created_at'] or 'N/A')[:19]
+        print(f"{s['session_id']:<8} {uid_str:<8} {plan:<18} {s['status']:<12} {s['total_students'] or 0:<10} {s['allocated_count'] or 0:<8} {created}")
+else:
+    print("  No sessions found")
+
+conn.close()
+
+print("\n" + "=" * 80)
+print("✅ Report complete")
+print("=" * 80)

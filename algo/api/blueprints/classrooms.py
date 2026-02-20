@@ -71,13 +71,21 @@ def validate_block_structure(block_structure: list, cols: int) -> tuple:
 @classrooms_bp.route('', methods=['GET'])
 @token_required
 def get_classrooms():
-    """List all classrooms - returns array directly for frontend compatibility"""
+    """List classrooms for current user + unassigned classrooms"""
     try:
+        user_id = getattr(request, 'user_id', None)
+        
         conn = get_db_connection()
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         
-        cur.execute("SELECT * FROM classrooms ORDER BY name ASC")
+        # Get user's classrooms AND unassigned classrooms (user_id IS NULL)
+        # This ensures existing classrooms created before user isolation are still visible
+        cur.execute("""
+            SELECT * FROM classrooms 
+            WHERE user_id = ? OR user_id IS NULL
+            ORDER BY name ASC
+        """, (user_id,))
         rows = cur.fetchall()
         
         # Apply auto-conversion for each classroom
@@ -93,7 +101,9 @@ def get_classrooms():
 @classrooms_bp.route('', methods=['POST'])
 @token_required
 def add_classroom():
-    """Add a new classroom"""
+    """Add a new classroom for current user"""
+    user_id = getattr(request, 'user_id', None)
+    
     data = request.json
     name = data.get('name')
     rows = data.get('rows')
@@ -105,6 +115,12 @@ def add_classroom():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
+        
+        # Check if user already has a classroom with this name
+        cur.execute("SELECT id FROM classrooms WHERE user_id = ? AND name = ?", (user_id, name))
+        if cur.fetchone():
+            conn.close()
+            return jsonify({"status": "error", "message": "You already have a classroom with this name"}), 400
         
         # broken_seats handling
         broken = data.get('broken_seats', [])
@@ -128,9 +144,9 @@ def add_classroom():
             block_width = block_structure[0] if block_structure else 2
              
         cur.execute("""
-            INSERT INTO classrooms (name, rows, cols, broken_seats, block_width, block_structure)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (name, rows, cols, broken_str, block_width, block_structure_str))
+            INSERT INTO classrooms (user_id, name, rows, cols, broken_seats, block_width, block_structure)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, name, rows, cols, broken_str, block_width, block_structure_str))
         
         cid = cur.lastrowid
         conn.commit()
@@ -145,9 +161,25 @@ def add_classroom():
 @classrooms_bp.route('/<int:room_id>', methods=['DELETE'])
 @token_required
 def delete_classroom(room_id):
+    """Delete a classroom (only if user owns it or it's unassigned)"""
+    user_id = getattr(request, 'user_id', None)
+    
     try:
         conn = get_db_connection()
         cur = conn.cursor()
+        
+        # Check ownership before deleting - allow if user owns it OR it's unassigned
+        cur.execute("SELECT user_id, name FROM classrooms WHERE id = ?", (room_id,))
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return jsonify({"status": "error", "message": "Classroom not found"}), 404
+        
+        owner_id = row[0]
+        if owner_id is not None and owner_id != user_id:
+            conn.close()
+            return jsonify({"status": "error", "message": "Access denied - you do not own this classroom"}), 403
+        
         cur.execute("DELETE FROM classrooms WHERE id = ?", (room_id,))
         conn.commit()
         conn.close()
@@ -160,18 +192,32 @@ def delete_classroom(room_id):
 @classrooms_bp.route('/<int:room_id>', methods=['PUT'])
 @token_required
 def update_classroom(room_id):
+    """Update a classroom (only if user owns it or it's unassigned)"""
+    user_id = getattr(request, 'user_id', None)
     data = request.json
+    
     try:
          conn = get_db_connection()
          conn.row_factory = sqlite3.Row
          cur = conn.cursor()
          
-         # Get current classroom to know cols for validation
-         cur.execute("SELECT cols FROM classrooms WHERE id = ?", (room_id,))
+         # Get current classroom to check ownership and know cols for validation
+         cur.execute("SELECT user_id, cols FROM classrooms WHERE id = ?", (room_id,))
          existing = cur.fetchone()
          if not existing:
              conn.close()
              return jsonify({"status": "error", "message": "Classroom not found"}), 404
+         
+         # Check ownership - allow if user owns it OR it's unassigned (NULL)
+         owner_id = existing['user_id']
+         if owner_id is not None and owner_id != user_id:
+             conn.close()
+             return jsonify({"status": "error", "message": "Access denied - you do not own this classroom"}), 403
+         
+         # If unassigned, claim it for this user
+         if owner_id is None:
+             cur.execute("UPDATE classrooms SET user_id = ? WHERE id = ?", (user_id, room_id))
+             print(f"📝 Classroom {room_id} claimed by user {user_id}")
          
          # Use new cols value if provided, otherwise use existing
          target_cols = data.get('cols', existing['cols'])
@@ -227,3 +273,39 @@ def update_classroom(room_id):
          return jsonify({"status": "success", "message": "Updated"}), 200
     except Exception as e:
          return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ============================================================================
+# ROUTE: POST /api/classrooms/claim-unassigned
+# ============================================================================
+@classrooms_bp.route('/claim-unassigned', methods=['POST'])
+@token_required
+def claim_unassigned_classrooms():
+    """Claim all unassigned classrooms for current user"""
+    user_id = getattr(request, 'user_id', None)
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Update all unassigned classrooms to current user
+        cur.execute("""
+            UPDATE classrooms 
+            SET user_id = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE user_id IS NULL
+        """, (user_id,))
+        
+        claimed_count = cur.rowcount
+        conn.commit()
+        conn.close()
+        
+        print(f"📝 User {user_id} claimed {claimed_count} unassigned classroom(s)")
+        
+        return jsonify({
+            "status": "success",
+            "message": f"Claimed {claimed_count} classroom(s)",
+            "claimed_count": claimed_count
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500

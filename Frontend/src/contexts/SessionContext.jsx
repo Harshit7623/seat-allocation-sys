@@ -1,5 +1,7 @@
-// frontend/src/contexts/SessionContext.jsx - PROPERLY FIXED
+﻿// frontend/src/contexts/SessionContext.jsx - PROPERLY FIXED
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useAuth } from './AuthContext';
+import { getToken } from '../utils/tokenStorage';
 
 const SessionContext = createContext(null);
 
@@ -25,6 +27,7 @@ export const useSession = () => {
 };
 
 export const SessionProvider = ({ children }) => {
+  const { user } = useAuth();
   const [session, setSession] = useState(null);
   const [hasActiveSession, setHasActiveSession] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -80,7 +83,7 @@ export const SessionProvider = ({ children }) => {
   const fetchActiveSession = useCallback(async () => {
     try {
       setError(null);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       
       const response = await fetch('/api/sessions/active', {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
@@ -112,7 +115,7 @@ export const SessionProvider = ({ children }) => {
           console.log('🧹 Session not active, clearing');
           setSession(null);
           setHasActiveSession(false);
-          localStorage.removeItem('currentSession');
+          sessionStorage.removeItem('currentSession');
         }
       } else {
         console.log('ℹ️ No active session');
@@ -137,6 +140,21 @@ export const SessionProvider = ({ children }) => {
   }, [fetchActiveSession]);
 
   // ============================================================================
+  // Re-fetch when user changes (account switch)
+  // ============================================================================
+  const userIdentity = user?.email || user?.id;
+  useEffect(() => {
+    if (userIdentity) {
+      // Clear stale session from previous user
+      setSession(null);
+      setHasActiveSession(false);
+      setError(null);
+      sessionStorage.removeItem('currentSession');
+      fetchActiveSession();
+    }
+  }, [userIdentity]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ============================================================================
   // Update/refresh session
   // ============================================================================
   const updateSession = useCallback(async () => {
@@ -151,7 +169,7 @@ export const SessionProvider = ({ children }) => {
     if (!session?.session_id) return;
     
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`/api/sessions/${session.session_id}/refresh-totals`, {
         method: 'POST',
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
@@ -186,7 +204,7 @@ export const SessionProvider = ({ children }) => {
     
     try {
       setError(null);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       
       const response = await fetch('/api/sessions/start', {
         method: 'POST',
@@ -238,7 +256,7 @@ export const SessionProvider = ({ children }) => {
     if (!session?.session_id) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `/api/sessions/${session.session_id}/finalize`,
         { 
@@ -255,7 +273,7 @@ export const SessionProvider = ({ children }) => {
       console.log('✅ Session completed');
       setSession(null);
       setHasActiveSession(false);
-      localStorage.removeItem('currentSession');
+      sessionStorage.removeItem('currentSession');
 
     } catch (err) {
       console.error('❌ Finalize error:', err);
@@ -271,7 +289,7 @@ export const SessionProvider = ({ children }) => {
     setSession(null);
     setHasActiveSession(false);
     setError(null);
-    localStorage.removeItem('currentSession');
+    sessionStorage.removeItem('currentSession');
   }, []);
 
   // ============================================================================
@@ -282,7 +300,7 @@ export const SessionProvider = ({ children }) => {
       console.log('🧹 Auto-clearing completed session');
       setSession(null);
       setHasActiveSession(false);
-      localStorage.removeItem('currentSession');
+      sessionStorage.removeItem('currentSession');
     }
   }, [session]);
 
@@ -313,7 +331,7 @@ export const SessionProvider = ({ children }) => {
     console.log('🧹 Auto-clearing non-active session:', session.status);
     setSession(null);
     setHasActiveSession(false);
-    localStorage.removeItem('currentSession');
+    sessionStorage.removeItem('currentSession');
   }
 }, [session?.status]);
 

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { getToken } from '../utils/tokenStorage';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   UserCheck, Eye, X, Loader2,
@@ -44,7 +45,7 @@ const AttendancePage = ({ showToast }) => {
   const fetchBatchData = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`/api/plan-batches/${planId}`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
@@ -144,7 +145,7 @@ const buildCompleteMetadata = () => {
 
     setActionLoading(batchLabel);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const completeMetadata = buildCompleteMetadata();
       
       console.log('📤 Sending batch download request:', { batchLabel, metadata: completeMetadata });
@@ -200,7 +201,7 @@ const buildCompleteMetadata = () => {
 
     setActionLoading('room');
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const completeMetadata = buildCompleteMetadata();
       
       console.log('📤 Sending room download request:', { roomName, metadata: completeMetadata });

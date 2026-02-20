@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { getToken } from '../utils/tokenStorage';
 import { 
   Loader2, 
   AlertCircle, 
@@ -108,7 +109,7 @@ const AdminFeedbackPage = ({ showToast }) => {
   const fetchAllFeedback = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const token = getToken();
       const response = await fetch('/api/feedback/admin/all', {
         method: 'GET',
         headers: {
@@ -137,6 +138,16 @@ const AdminFeedbackPage = ({ showToast }) => {
   useEffect(() => {
     fetchAllFeedback();
   }, []);
+
+  // Re-fetch when user changes (account switch)
+  const userIdentity = user?.email || user?.id;
+  useEffect(() => {
+    if (userIdentity) {
+      setFeedbacks([]);
+      setSelectedFeedback(null);
+      fetchAllFeedback();
+    }
+  }, [userIdentity]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Calculate stats
   const stats = useMemo(() => {

@@ -19,7 +19,7 @@ class SessionQueries:
         return dict(row) if row else None
 
     @staticmethod
-    def create_session(plan_id: str, user_id: int = 1, name: str = None) -> int:
+    def create_session(plan_id: str, user_id: int, name: str = None) -> int:
         db = get_db()
         cursor = db.execute(
             """
@@ -130,7 +130,7 @@ class SessionQueries:
     def get_active_session_for_user(user_id: int) -> Optional[Dict[str, Any]]:
         """
         Get the most recent active session for a user.
-        Prioritizes user's own sessions, then falls back to user_id=1 (orphaned).
+        Only returns sessions owned by the specified user.
         
         Args:
             user_id: The user ID to find active session for
@@ -140,7 +140,39 @@ class SessionQueries:
         """
         db = get_db()
         
-        # First try user's own active session
+        # Only get user's own active session - no fallback to other users
+        cursor = db.execute("""
+            SELECT s.*, 
+                   (SELECT COUNT(DISTINCT classroom_id) FROM allocations WHERE session_id = s.session_id) as allocated_rooms
+            FROM allocation_sessions s 
+            WHERE s.user_id = ? AND s.status = 'active'
+            ORDER BY s.last_activity DESC
+            LIMIT 1
+        """, (user_id,))
+        session = cursor.fetchone()
+        
+        return dict(session) if session else None
+
+    @staticmethod
+    def get_or_create_active_session(user_id: int, auto_create: bool = False, session_name: str = None) -> Optional[Dict[str, Any]]:
+        """
+        Get active session for user, optionally creating one if none exists.
+        
+        This prevents duplicate session creation by:
+        1. First checking if user already has an active session
+        2. Only creating a new session if auto_create=True AND no active session exists
+        
+        Args:
+            user_id: The user ID to get/create session for
+            auto_create: If True and no active session, create one
+            session_name: Optional name for auto-created session
+            
+        Returns:
+            Session dict or None (if no session and auto_create=False)
+        """
+        db = get_db()
+        
+        # First, check for existing active session
         cursor = db.execute("""
             SELECT s.*, 
                    (SELECT COUNT(DISTINCT classroom_id) FROM allocations WHERE session_id = s.session_id) as allocated_rooms
@@ -154,18 +186,33 @@ class SessionQueries:
         if session:
             return dict(session)
         
-        # Fallback: check for orphaned sessions (user_id = 1)
-        cursor = db.execute("""
-            SELECT s.*,
-                   (SELECT COUNT(DISTINCT classroom_id) FROM allocations WHERE session_id = s.session_id) as allocated_rooms
-            FROM allocation_sessions s 
-            WHERE s.user_id = 1 AND s.status = 'active'
-            ORDER BY s.last_activity DESC
-            LIMIT 1
-        """)
-        session = cursor.fetchone()
+        # No active session found
+        if not auto_create:
+            return None
         
-        return dict(session) if session else None
+        # Auto-create a new session
+        import uuid
+        plan_id = str(uuid.uuid4())
+        name = session_name or "Auto Session"
+        
+        cursor = db.execute("""
+            INSERT INTO allocation_sessions (plan_id, user_id, name, status, created_at, last_activity)
+            VALUES (?, ?, ?, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """, (plan_id, user_id, name))
+        db.commit()
+        
+        session_id = cursor.lastrowid
+        
+        return {
+            'session_id': session_id,
+            'plan_id': plan_id,
+            'user_id': user_id,
+            'name': name,
+            'status': 'active',
+            'total_students': 0,
+            'allocated_count': 0,
+            'allocated_rooms': 0
+        }
 
     @staticmethod
     def expire_all_active_sessions(user_id: int = None) -> int:
@@ -197,7 +244,7 @@ class SessionQueries:
     @staticmethod
     def claim_orphaned_sessions(user_id: int) -> int:
         """
-        Claim all orphaned sessions (user_id=1) for the specified user.
+        Claim all orphaned sessions (user_id IS NULL) for the specified user.
         
         Args:
             user_id: The user ID to claim sessions for
@@ -209,7 +256,7 @@ class SessionQueries:
         cursor = db.execute("""
             UPDATE allocation_sessions 
             SET user_id = ?, last_activity = CURRENT_TIMESTAMP
-            WHERE user_id = 1 AND status = 'active'
+            WHERE user_id IS NULL AND status = 'active'
         """, (user_id,))
         db.commit()
         return cursor.rowcount
@@ -218,6 +265,7 @@ class SessionQueries:
     def get_user_sessions(user_id: int, status_filter: str = None, limit: int = 50) -> List[Dict[str, Any]]:
         """
         Get all sessions for a user with optional status filter.
+        Only returns sessions owned by the specified user.
         
         Args:
             user_id: User ID to get sessions for
@@ -229,10 +277,11 @@ class SessionQueries:
         """
         db = get_db()
         
+        # Only return sessions owned by this user - strict isolation
         query = """
             SELECT session_id, plan_id, total_students, allocated_count, status, created_at, last_activity
             FROM allocation_sessions
-            WHERE user_id = ? OR user_id = 1 OR user_id IS NULL
+            WHERE user_id = ?
         """
         params = [user_id]
         

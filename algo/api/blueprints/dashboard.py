@@ -9,42 +9,49 @@ from datetime import datetime, timedelta
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/api/dashboard')
 
 def _get_user_id():
-    """Get user_id from request context"""
+    """Get user_id from request context. Returns None if not authenticated."""
     if hasattr(request, 'user_id') and request.user_id:
         return request.user_id
-    return 1
+    return None
 
 @dashboard_bp.route('/stats', methods=['GET'])
 @token_required
 def get_stats():
-    """Get dashboard statistics - MATCHES FRONTEND EXPECTED FORMAT"""
+    """Get dashboard statistics - STRICTLY for current user only"""
     user_id = _get_user_id()
+    if not user_id:
+        return jsonify({"success": False, "error": "Authentication required"}), 401
     
     try:
         conn = get_db_connection()
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         
-        # Total classrooms
-        cur.execute("SELECT COUNT(*) as count FROM classrooms")
+        # Total classrooms (user's classrooms only)
+        cur.execute("SELECT COUNT(*) as count FROM classrooms WHERE user_id = ?", (user_id,))
         total_classrooms = cur.fetchone()['count']
         
-        # Total students (across all uploads)
-        cur.execute("SELECT COUNT(*) as count FROM students")
+        # Total students (from user's sessions only)
+        cur.execute("""
+            SELECT COUNT(*) as count FROM students s
+            JOIN uploads u ON s.upload_id = u.id
+            JOIN allocation_sessions sess ON u.session_id = sess.session_id
+            WHERE sess.user_id = ?
+        """, (user_id,))
         total_students = cur.fetchone()['count']
         
-        # Allocated seats (from allocations table)
+        # Allocated seats (from user's sessions only - strict isolation)
         cur.execute("""
             SELECT COUNT(*) as count FROM allocations a
             JOIN allocation_sessions s ON a.session_id = s.session_id
-            WHERE s.user_id = ? OR s.user_id = 1 OR s.user_id IS NULL
+            WHERE s.user_id = ?
         """, (user_id,))
         allocated_seats = cur.fetchone()['count']
         
-        # Completed plans
+        # Completed plans (user's plans only - strict isolation)
         cur.execute("""
             SELECT COUNT(*) as count FROM allocation_sessions 
-            WHERE status = 'completed' AND (user_id = ? OR user_id = 1 OR user_id IS NULL)
+            WHERE status = 'completed' AND user_id = ?
         """, (user_id,))
         completed_plans = cur.fetchone()['count']
         
@@ -77,8 +84,10 @@ def get_stats():
 @dashboard_bp.route('/activity', methods=['GET'])
 @token_required
 def get_activity():
-    """Get recent activity log - RETURNS ACTUAL DATA"""
+    """Get recent activity log - STRICTLY for current user only"""
     user_id = _get_user_id()
+    if not user_id:
+        return jsonify({"success": False, "error": "Authentication required"}), 401
     limit = request.args.get('limit', 10, type=int)
     
     try:
@@ -88,7 +97,7 @@ def get_activity():
         
         activities = []
         
-        # Get recent session activities
+        # Get recent session activities (user's sessions only - strict isolation)
         cur.execute("""
             SELECT 
                 session_id,
@@ -99,7 +108,7 @@ def get_activity():
                 created_at,
                 last_activity
             FROM allocation_sessions 
-            WHERE user_id = ? OR user_id = 1 OR user_id IS NULL
+            WHERE user_id = ?
             ORDER BY COALESCE(last_activity, created_at) DESC
             LIMIT ?
         """, (user_id, limit))
@@ -169,8 +178,10 @@ def get_activity():
 @dashboard_bp.route('/session-info', methods=['GET'])
 @token_required
 def get_session_info():
-    """Get current session and upcoming exam info"""
+    """Get current session info - STRICTLY for current user only"""
     user_id = _get_user_id()
+    if not user_id:
+        return jsonify({"success": False, "error": "Authentication required"}), 401
     
     try:
         # Calculate current semester
@@ -191,11 +202,11 @@ def get_session_info():
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         
-        # Check for active allocation (indicates upcoming exam)
+        # Check for active allocation (user's sessions only - strict isolation)
         cur.execute("""
             SELECT plan_id, created_at, total_students, allocated_count
             FROM allocation_sessions 
-            WHERE status = 'active' AND (user_id = ? OR user_id = 1 OR user_id IS NULL)
+            WHERE status = 'active' AND user_id = ?
             ORDER BY last_activity DESC 
             LIMIT 1
         """, (user_id,))
@@ -222,4 +233,75 @@ def get_session_info():
     except Exception as e:
         import traceback
         traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@dashboard_bp.route('/user-activity', methods=['GET'])
+@token_required
+def get_user_activity_log():
+    """Get user's activity log (last 7 days)"""
+    user_id = _get_user_id()
+    if not user_id:
+        return jsonify({"success": False, "error": "Authentication required"}), 401
+    limit = request.args.get('limit', 50, type=int)
+    days = request.args.get('days', 7, type=int)
+    
+    try:
+        from algo.services.activity_service import ActivityService
+        activities = ActivityService.get_user_activity(user_id, limit=limit, days=days)
+        
+        # Format activities for frontend
+        formatted = []
+        for act in activities:
+            timestamp = act.get('created_at')
+            if timestamp:
+                try:
+                    dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                    time_str = dt.strftime('%I:%M %p')
+                    date_str = dt.strftime('%b %d')
+                except:
+                    time_str = 'Recently'
+                    date_str = ''
+            else:
+                time_str = 'Unknown'
+                date_str = ''
+            
+            formatted.append({
+                "id": act.get('id'),
+                "time": time_str,
+                "date": date_str,
+                "action": act.get('action'),
+                "details": act.get('details'),
+                "endpoint": act.get('endpoint')
+            })
+        
+        return jsonify({
+            "success": True, 
+            "activities": formatted,
+            "count": len(formatted)
+        }), 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e), "activities": []}), 500
+
+
+@dashboard_bp.route('/activity-summary', methods=['GET'])
+@token_required
+def get_activity_summary():
+    """Get summary of user's activity"""
+    user_id = _get_user_id()
+    if not user_id:
+        return jsonify({"success": False, "error": "Authentication required"}), 401
+    days = request.args.get('days', 7, type=int)
+    
+    try:
+        from algo.services.activity_service import ActivityService
+        summary = ActivityService.get_activity_summary(user_id, days=days)
+        
+        return jsonify({
+            "success": True,
+            "summary": summary
+        }), 200
+    except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

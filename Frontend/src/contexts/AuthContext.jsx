@@ -1,4 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import {
+  getToken, setToken, removeToken,
+  getUser as getStoredUser, setUserData, clearAuth,
+  migrateFromLocalStorage, getAuthHeaders
+} from '../utils/tokenStorage';
 
 const AuthContext = createContext();
 
@@ -20,22 +25,24 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const initializeAuth = () => {
       try {
-        // Get token from localStorage
-        const token = localStorage.getItem('token');
-        const userData = localStorage.getItem('user');
+        // One-time migration from localStorage → sessionStorage
+        migrateFromLocalStorage();
+
+        // Get token from sessionStorage (per-tab isolation)
+        const token = getToken();
+        const userData = getStoredUser();
 
         if (token && userData) {
           // User was previously logged in - restore session
-          setUser(JSON.parse(userData));
-          console.log('✅ User session restored from localStorage');
+          setUser(userData);
+          console.log('✅ User session restored from sessionStorage (tab-isolated)');
         } else {
           console.log('ℹ️  No saved session found');
         }
       } catch (error) {
         console.error('Error restoring session:', error);
         // Clear corrupted data
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        clearAuth();
       }
       
       setLoading(false);
@@ -97,9 +104,9 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: data.message || data.error || 'Google login failed' };
       }
 
-      // Store token and user data in localStorage
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      // Store token and user data in sessionStorage (per-tab isolation)
+      setToken(data.token);
+      setUserData(data.user);
       setUser(data.user);
 
       console.log('✅ Google login successful');
@@ -136,9 +143,9 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: data.message || data.error || 'Login failed' };
       }
 
-      // Store token and user data in localStorage
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      // Store token and user data in sessionStorage (per-tab isolation)
+      setToken(data.token);
+      setUserData(data.user);
       setUser(data.user);
 
       console.log('✅ Email login successful');
@@ -180,9 +187,9 @@ const signup = async (userData) => {
 
     // ✅ Auto-login on successful signup
     if (data.token && data.user) {
-      // Store token and user data
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      // Store token and user data in sessionStorage (per-tab isolation)
+      setToken(data.token);
+      setUserData(data.user);
       setUser(data.user);
 
       console.log('✅ Signup successful - User auto-logged in');
@@ -210,7 +217,7 @@ const signup = async (userData) => {
   // ============================================================================
   const logout = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       await fetch(`${API_BASE_URL}/api/auth/logout`, {
         method: 'POST',
@@ -221,9 +228,8 @@ const signup = async (userData) => {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      // Clear localStorage
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      // Clear sessionStorage auth data (per-tab)
+      clearAuth();
       setUser(null);
       console.log('✅ Logged out successfully');
     }
@@ -234,7 +240,7 @@ const signup = async (userData) => {
   // ============================================================================
   const getProfile = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       if (!token) {
         return { success: false, error: 'No token found' };
       }
@@ -271,7 +277,7 @@ const signup = async (userData) => {
   // ============================================================================
   const updateProfile = async (username, email) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       if (!token) {
         return { success: false, error: 'No token found' };
       }
@@ -298,9 +304,9 @@ const signup = async (userData) => {
         return { success: false, error: data.message || data.error || 'Failed to update profile' };
       }
 
-      // Update localStorage with new user data
+      // Update sessionStorage with new user data
       if (data.user) {
-        localStorage.setItem('user', JSON.stringify(data.user));
+        setUserData(data.user);
         setUser(data.user);
       }
 

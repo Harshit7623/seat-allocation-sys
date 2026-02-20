@@ -1,13 +1,14 @@
-// src/components/database/hooks/useDatabaseApi.js
+﻿// src/components/database/hooks/useDatabaseApi.js
 
 import { useState, useCallback } from 'react';
+import { getToken } from '../../../utils/tokenStorage';
 
 export const useDatabaseApi = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const getHeaders = useCallback(() => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     return {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
@@ -144,7 +145,7 @@ export const useDatabaseApi = () => {
 
   // In useDatabaseApi.jsx
 const deleteSession = async (sessionId) => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     
     // Use the sessions endpoint, not database
     const response = await fetch(`/api/sessions/${sessionId}`, {
