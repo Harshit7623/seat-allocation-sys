@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
+import { getToken } from '../utils/tokenStorage';
 import SplitText from '../components/SplitText';
 import StyledButton from '../components/Template/StyledButton.jsx'; 
 import StyledInput from '../components/Template/StyledInput.jsx'; 
@@ -60,7 +61,7 @@ function TemplateEditor({ showToast }) {
     }, []);
 
     const getAuthHeaders = useCallback(() => {
-        const token = session?.token || localStorage.getItem('token') || sessionStorage.getItem('token');
+        const token = session?.token || getToken();
         return {
             'Authorization': token ? `Bearer ${token}` : '',
             'Content-Type': 'application/json'
@@ -75,7 +76,7 @@ function TemplateEditor({ showToast }) {
         if (sessionLoading) return;
 
         // 2. Check for token (Context or LocalStorage)
-        const token = session?.token || localStorage.getItem('token');
+        const token = session?.token || getToken();
 
         // 3. If no token, just stop loading and return (User sees Auth Required screen)
         if (!token) {
@@ -125,7 +126,7 @@ function TemplateEditor({ showToast }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const token = session?.token || localStorage.getItem('token');
+        const token = session?.token || getToken();
         if (!token) return setError('Please log in to save');
 
         setSaving(true);
@@ -179,7 +180,7 @@ function TemplateEditor({ showToast }) {
     };
 
     const generateTestPDF = async () => {
-        const token = session?.token || localStorage.getItem('token');
+        const token = session?.token || getToken();
         if (!token) {
             setError('Please log in to generate PDFs');
             return;
@@ -240,7 +241,7 @@ function TemplateEditor({ showToast }) {
     }
 
     // Show Auth Required ONLY if session loading is done AND no token exists
-    const token = session?.token || localStorage.getItem('token');
+    const token = session?.token || getToken();
     if (!token) {
         return (
             <div className="min-h-screen bg-gray-50 dark:bg-[#050505] flex items-center justify-center p-4">

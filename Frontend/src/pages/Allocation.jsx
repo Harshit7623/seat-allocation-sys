@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { getToken } from '../utils/tokenStorage';
 import { motion, AnimatePresence } from "framer-motion";
 import { getPrintFriendlyColor } from '../utils/colorUtils';
 import { 
@@ -90,6 +92,7 @@ const ConstraintIndicator = ({ constraints, validation }) => {
 
 const AllocationPage = ({ showToast }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   // Session & Data
   const [session, setSession] = useState(null);
@@ -157,7 +160,7 @@ const AllocationPage = ({ showToast }) => {
       setInitializing(true);
       
       try {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         const res = await fetch('/api/sessions/active', {
           headers: token ? { 'Authorization': `Bearer ${token}` } : {}
         });
@@ -194,7 +197,7 @@ const AllocationPage = ({ showToast }) => {
     
     setLoadingBatches(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`/api/sessions/${sessionId}/uploads`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
@@ -215,7 +218,7 @@ const AllocationPage = ({ showToast }) => {
     if (!sessionId) return;
     
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`/api/sessions/${sessionId}/stats`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
@@ -236,7 +239,7 @@ const AllocationPage = ({ showToast }) => {
 
   // Load classrooms
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     fetch('/api/classrooms', {
       headers: token ? { 'Authorization': `Bearer ${token}` } : {}
     })
@@ -246,6 +249,49 @@ const AllocationPage = ({ showToast }) => {
         console.error(err);
       });
   }, []);
+
+  // Re-fetch when user changes (account switch)
+  const userIdentity = user?.email || user?.id;
+  useEffect(() => {
+    if (userIdentity) {
+      setSession(null);
+      setHasActiveSession(false);
+      setUploadedBatches([]);
+      setClassrooms([]);
+      setBatchAllocations({});
+      setUsedRoomIds([]);
+      setWebData(null);
+      setInitializing(true);
+      // Re-run initialization
+      const reinitialize = async () => {
+        try {
+          const token = getToken();
+          const res = await fetch('/api/sessions/active', {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          });
+          const data = await res.json();
+          if (data.success && data.session_data && data.session_data.status === 'active') {
+            setSession(data.session_data);
+            setHasActiveSession(true);
+            await loadUploadedBatches(data.session_data.session_id);
+            await loadBatchAllocations(data.session_data.session_id);
+            setUsedRoomIds(data.session_data.allocated_rooms?.map(r => r.classroom_id) || []);
+          }
+          // Re-load classrooms
+          const cRes = await fetch('/api/classrooms', {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          });
+          const cData = await cRes.json();
+          setClassrooms(Array.isArray(cData) ? cData : []);
+        } catch (err) {
+          console.error('Re-init failed:', err);
+        } finally {
+          setInitializing(false);
+        }
+      };
+      reinitialize();
+    }
+  }, [userIdentity]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Stats
   const allocated = session?.allocated_count || 0;
@@ -431,7 +477,7 @@ const AllocationPage = ({ showToast }) => {
     
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch("/api/generate-seating", {
         method: "POST",
         headers: { 
@@ -467,7 +513,7 @@ const AllocationPage = ({ showToast }) => {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(
         `/api/sessions/${session.session_id}/allocate-room`,
         {
@@ -529,7 +575,7 @@ const AllocationPage = ({ showToast }) => {
 
     setUndoing(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(
         `/api/sessions/${session.session_id}/undo`,
         { 
@@ -586,7 +632,7 @@ const AllocationPage = ({ showToast }) => {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(
         `/api/sessions/${session.session_id}/finalize`, 
         { 
@@ -621,7 +667,7 @@ const AllocationPage = ({ showToast }) => {
 
     setResetting(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`/api/sessions/${session.session_id}/expire`, {
         method: "POST",
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
@@ -645,7 +691,7 @@ const AllocationPage = ({ showToast }) => {
   const fetchStats = async () => {
     if (!session?.session_id) return;
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`/api/sessions/${session.session_id}/stats`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
@@ -668,7 +714,7 @@ const AllocationPage = ({ showToast }) => {
     }
     setPdfLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const payload = preparePayload();
       payload.seating = webData.seating;
       // Include metadata from webData which contains block_structure from algorithm
@@ -706,7 +752,7 @@ const AllocationPage = ({ showToast }) => {
   const loadRoomBatches = async () => {
     if (!session?.session_id || !selectedRoomName) return;
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`/api/sessions/${session.session_id}/rooms/${encodeURIComponent(selectedRoomName)}/batches`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
@@ -746,7 +792,7 @@ const AllocationPage = ({ showToast }) => {
     
     setAddingExternal(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`/api/sessions/${session.session_id}/rooms/${encodeURIComponent(selectedRoomName)}/add-external-student`, {
         method: 'POST',
         headers: {
@@ -792,7 +838,7 @@ const AllocationPage = ({ showToast }) => {
     if (!window.confirm(`Remove ${seat.roll_number} from this seat?`)) return;
     
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`/api/sessions/${session.session_id}/rooms/${encodeURIComponent(selectedRoomName)}/remove-external-student`, {
         method: 'POST',
         headers: {

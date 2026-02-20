@@ -10,11 +10,13 @@ import {
   Zap,      // ← ADDED
   ZapOff    // ← ADDED
 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 import DatabaseHierarchyView from './DatabaseHierarchyView';
 import DatabaseTableView from './DatabaseTableView';
 import useDatabaseApi from './hooks/useDatabaseApi';
 
 const DatabaseManager = ({ showToast }) => {
+  const { user } = useAuth();
   const [viewMode, setViewMode] = useState('hierarchy');
   const [refreshKey, setRefreshKey] = useState(0);
   const [autoRefresh, setAutoRefresh] = useState(false);        // ← ADDED
@@ -76,6 +78,14 @@ const DatabaseManager = ({ showToast }) => {
       window.removeEventListener('students-uploaded', handleDatabaseUpdate);
     };
   }, [handleRefresh]);
+
+  // Re-fetch when user changes (account switch)
+  const userIdentity = user?.email || user?.id;
+  useEffect(() => {
+    if (userIdentity) {
+      handleRefresh();
+    }
+  }, [userIdentity]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a] p-4 md:p-6">

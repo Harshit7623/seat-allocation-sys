@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { getToken } from '../utils/tokenStorage';
 import { useSession } from '../contexts/SessionContext';
 import SessionIndicator from '../components/SessionIndicator';
 import PageTransition from '../components/PageTransition';
@@ -12,6 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const UploadPage = ({ showToast }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   const { 
     session, 
@@ -90,9 +93,29 @@ const UploadPage = ({ showToast }) => {
     }
   }, [hasActiveSession, session?.session_id, pageReady]);
 
+  // Re-fetch when user changes (account switch)
+  const userIdentity = user?.email || user?.id;
+  useEffect(() => {
+    if (userIdentity) {
+      setUploadedBatches([]);
+      setUploadResult(null);
+      setFile(null);
+      setError(null);
+      setPageReady(false);
+      // Re-trigger initialization
+      const reinit = async () => {
+        clearCompletedSession?.();
+        await updateSession();
+        await new Promise(resolve => setTimeout(resolve, 100));
+        setPageReady(true);
+      };
+      reinit();
+    }
+  }, [userIdentity]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const fetchSessionUploads = async (sessionId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`/api/sessions/${sessionId}/uploads`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
@@ -174,7 +197,7 @@ const UploadPage = ({ showToast }) => {
       if (nameColumn.trim()) formData.append('nameColumn', nameColumn.trim());
       if (enrollmentColumn.trim()) formData.append('enrollmentColumn', enrollmentColumn.trim());
 
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch('/api/upload', {
         method: 'POST',
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
@@ -201,7 +224,7 @@ const UploadPage = ({ showToast }) => {
 
     setCommitLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       
       const payload = { batch_id: uploadResult.batch_id };
       if (hasActiveSession && session) {
@@ -264,7 +287,7 @@ const UploadPage = ({ showToast }) => {
 
     try {
       const upload_ids = uploadedBatches.map(b => b.upload_id);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       
       let response = await fetch('/api/sessions/start', {
           method: 'POST',

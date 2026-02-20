@@ -52,7 +52,7 @@ const SignupPage = ({ showToast }) => {
     
     if (result.success) {
       showToast('Account created successfully!', 'success');
-      setTimeout(() => navigate('/login'), 1500);
+      setTimeout(() => navigate('/dashboard'), 1500);  // Auto-login works, go directly to dashboard
     } else {
       showToast(result.error || 'Signup failed', 'error');
     }

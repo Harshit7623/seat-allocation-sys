@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
@@ -20,6 +20,7 @@ import {
   FileText
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { getToken } from '../utils/tokenStorage';
 import SplitText from '../components/SplitText';
 
 // StatCard Component with counter animation
@@ -148,7 +149,7 @@ const DashboardPage = () => {
   // Fetch dashboard stats
   const fetchStats = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch('/api/dashboard/stats', {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
@@ -207,7 +208,7 @@ const DashboardPage = () => {
   // Fetch activity log
   const fetchActivity = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch('/api/dashboard/activity?limit=10', {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
@@ -235,7 +236,7 @@ const DashboardPage = () => {
   // Fetch session info
   const fetchSessionInfo = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch('/api/dashboard/session-info', {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
@@ -304,6 +305,19 @@ const DashboardPage = () => {
     return () => clearInterval(interval);
   }, [fetchDashboardData]);
 
+  // Re-fetch when user changes (account switch) - clears stale data first
+  const userIdentity = user?.email || user?.id;
+  useEffect(() => {
+    if (userIdentity) {
+      // Clear stale data from previous user before fetching new data
+      setStats([]);
+      setActivityLog([]);
+      setSessionInfo({ currentSession: 'Loading...', nextExam: null });
+      setError(null);
+      fetchDashboardData();
+    }
+  }, [userIdentity]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Quick actions config - matching CreatePlan style
   const quickActions = [
     { label: 'Create Plan', desc: 'Start new allocation', page: 'create-plan', icon: Upload, bgColor: 'bg-orange-500' },
@@ -319,7 +333,7 @@ const DashboardPage = () => {
     setDownloading(true);
     setDownloadStatus('Starting download...');
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch('/api/download-report', {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });

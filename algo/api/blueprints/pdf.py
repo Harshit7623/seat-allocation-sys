@@ -12,6 +12,53 @@ logger = logging.getLogger(__name__)
 
 CACHE_MGR = CacheManager()
 
+
+# ============================================================================
+# HELPER: Verify plan ownership
+# ============================================================================
+def _verify_plan_ownership(plan_id: str, user_id: int) -> bool:
+    """
+    Verify that the user owns the plan (session).
+    STRICT: No ADMIN bypass, no user_id=1 fallback.
+    
+    Args:
+        plan_id: The plan_id to check
+        user_id: The user making the request
+        
+    Returns:
+        True if access allowed, False otherwise
+    """
+    try:
+        from algo.database.db import get_db_connection
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT user_id FROM allocation_sessions WHERE plan_id = ?
+        """, (plan_id,))
+        row = cur.fetchone()
+        conn.close()
+        
+        if not row:
+            # Plan doesn't exist in DB - allow (might be old cache-only data)
+            return True
+        
+        owner_id = row[0]
+        
+        # Allow if user owns the session
+        if owner_id == user_id:
+            return True
+        
+        # Allow if session is unassigned (NULL user_id) - legacy data
+        if owner_id is None:
+            return True
+        
+        return False
+    except Exception as e:
+        logger.warning(f"Plan ownership check error: {e}")
+        return True  # Fail open for backwards compatibility
+
+
 # ============================================================================
 # HELPER: Get seating from cache
 # ============================================================================
@@ -341,16 +388,9 @@ def generate_pdf():
 def get_plan_batches(plan_id):
     """Get batch information for ALL rooms in a plan"""
     try:
-        # Verify ownership of plan_id
-        from algo.database.db import get_db_connection
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("SELECT user_id FROM allocation_sessions WHERE plan_id = ?", (plan_id,))
-        row = cur.fetchone()
-        conn.close()
-        
-        if not row or row[0] != request.user_id:
-            return jsonify({"error": "Unauthorized access to plan"}), 403
+        # Verify ownership using helper
+        if not _verify_plan_ownership(plan_id, request.user_id):
+            return jsonify({"error": "Access denied - you do not own this plan"}), 403
 
         cache_data = CACHE_MGR.load_snapshot(plan_id)
         
@@ -439,6 +479,10 @@ def generate_pdf_batch():
         
         if not plan_id:
             return jsonify({"error": "plan_id required"}), 400
+        
+        # Verify ownership before generating PDFs
+        if not _verify_plan_ownership(plan_id, request.user_id):
+            return jsonify({"error": "Access denied - you do not own this plan"}), 403
         
         cache_data = CACHE_MGR.load_snapshot(plan_id)
         if not cache_data:

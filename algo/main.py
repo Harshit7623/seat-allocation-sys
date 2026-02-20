@@ -88,6 +88,24 @@ def create_app(test_config=None):
     with app.app_context():
         ensure_demo_db()
         
+        # Auto-expire stale sessions on startup
+        try:
+            from algo.services.session_service import SessionService
+            result = SessionService.auto_expire_stale_sessions()
+            if result.get('expired_count', 0) > 0:
+                logger.info(f"⏰ Startup: Auto-expired {result['expired_count']} stale session(s)")
+        except Exception as e:
+            logger.warning(f"Could not auto-expire stale sessions: {e}")
+        
+        # Cleanup old activity logs (7-day retention)
+        try:
+            from algo.services.activity_service import ActivityService
+            deleted = ActivityService.cleanup_old_logs()
+            if deleted > 0:
+                logger.info(f"🧹 Startup: Cleaned up {deleted} old activity log entries")
+        except Exception as e:
+            logger.warning(f"Could not cleanup old activity logs: {e}")
+        
     @app.teardown_appcontext
     def teardown_db(exception):
         close_db(exception)
@@ -122,11 +140,55 @@ def create_app(test_config=None):
         user_id = getattr(request, 'user_id', None)
         if not user_id:
             return response
-            
+        
+        # Skip logging for high-frequency polling endpoints
+        skip_paths = ['/api/health', '/api/sessions/active', '/api/dashboard/stats']
+        if any(request.path.startswith(p) for p in skip_paths):
+            try:
+                UserQueries.track_activity(user_id, request.path)
+            except Exception:
+                pass
+            return response
+        
+        # Log significant actions to user activity log (for user-specific history)
         try:
-             UserQueries.track_activity(user_id, request.path)
+            from algo.services.activity_service import ActivityService
+            
+            # Determine action description based on method and path
+            action = f"{request.method} {request.path}"
+            
+            # Only log successful requests for meaningful actions
+            if response.status_code < 400:
+                # Create human-readable action for important endpoints
+                action_map = {
+                    ('POST', '/api/upload'): 'Uploaded student file',
+                    ('POST', '/api/sessions/start'): 'Started new session',
+                    ('POST', '/api/generate-seating'): 'Generated seating plan',
+                    ('POST', '/api/generate-pdf'): 'Generated PDF',
+                    ('POST', '/api/classrooms'): 'Created classroom',
+                    ('DELETE', '/api/classrooms'): 'Deleted classroom',
+                    ('DELETE', '/api/sessions'): 'Deleted session',
+                    ('POST', '/api/allocate'): 'Allocated students',
+                }
+                
+                for (method, path_prefix), readable_action in action_map.items():
+                    if request.method == method and request.path.startswith(path_prefix):
+                        action = readable_action
+                        break
+                
+                ActivityService.log_action(
+                    user_id=user_id,
+                    action=action,
+                    endpoint=request.path,
+                    ip_address=request.remote_addr
+                )
         except Exception:
-             pass # Fail silently
+            pass  # Fail silently - logging should not break the app
+        
+        try:
+            UserQueries.track_activity(user_id, request.path)
+        except Exception:
+            pass  # Fail silently
         
         return response
 

@@ -1,5 +1,7 @@
-// frontend/src/pages/ClassroomPage.jsx
+﻿// frontend/src/pages/ClassroomPage.jsx
 import React, { useState, useEffect, useMemo } from "react";
+import { useAuth } from '../contexts/AuthContext';
+import { getToken } from '../utils/tokenStorage';
 import SplitText from '../components/SplitText';
 import { motion } from "framer-motion";
 import { Plus, Save, Trash2, LayoutGrid, AlertCircle, Monitor, X, CheckCircle2, Building, Columns, Minus } from "lucide-react";
@@ -33,6 +35,7 @@ const Label = ({ className, children }) => (
 );
 
 export default function ClassroomPage({ showToast }) {
+  const { user } = useAuth();
   const [classrooms, setClassrooms] = useState([]);
   const [selectedRoomId, setSelectedRoomId] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -81,7 +84,7 @@ export default function ClassroomPage({ showToast }) {
   const fetchClassrooms = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch('/api/classrooms', {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
@@ -100,6 +103,17 @@ export default function ClassroomPage({ showToast }) {
   };
 
   useEffect(() => { fetchClassrooms(); }, []);
+
+  // Re-fetch when user changes (account switch)
+  const userIdentity = user?.email || user?.id;
+  useEffect(() => {
+    if (userIdentity) {
+      setClassrooms([]);
+      setSelectedRoomId(null);
+      setRoomData({ id: null, name: '', rows: 8, cols: 10, broken_seats: '', block_width: 2, block_structure: null });
+      fetchClassrooms();
+    }
+  }, [userIdentity]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelectRoom = (room) => {
     setSelectedRoomId(room.id);
@@ -161,7 +175,7 @@ export default function ClassroomPage({ showToast }) {
 
     setSaving(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       
       // ✅ Use PUT for updates, POST for creates
       const isEditing = roomData.id != null && selectedRoomId !== 'new';
@@ -229,7 +243,7 @@ export default function ClassroomPage({ showToast }) {
     if (!roomData.id || !window.confirm(`Delete "${roomData.name}"? This action cannot be undone.`)) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`/api/classrooms/${roomData.id}`, { 
         method: 'DELETE',
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
