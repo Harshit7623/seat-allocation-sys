@@ -9,7 +9,51 @@ import ComplexityCards from '@site/src/components/complexitycards';
 
 # 🛠️ Developer Setup
 
-<ComplexityCards />
+export const setupCards = [
+  {
+    title: "Installation Complexity",
+    theme: "indigo",
+    tableData: {
+      headers: ["Step", "Difficulty", "Time (min)"],
+      rows: [
+        ["Prerequisites Installation", "Easy", "5-10"],
+        ["Backend Setup", "Medium", "10-15"],
+        ["Frontend Setup", "Medium", "10-15"],
+        ["Database Configuration", "Easy", "5"],
+        ["Environment Variables", "Easy", "3"]
+      ]
+    }
+  },
+  {
+    title: "System Requirements",
+    theme: "emerald",
+    tableData: {
+      headers: ["Component", "Requirement", "Status"],
+      rows: [
+        ["Node.js", "v16+", "Required"],
+        ["Python", "v3.8+", "Required"],
+        ["Flask", "2.0+", "Backend"],
+        ["React", "18+", "Frontend"],
+        ["SQLite", "3.0+", "Database"]
+      ]
+    }
+  },
+  {
+    title: "Port Allocations",
+    theme: "amber",
+    tableData: {
+      headers: ["Service", "Port", "Purpose"],
+      rows: [
+        ["Backend API", "5000", "Flask REST API"],
+        ["Frontend App", "3000", "React Development"],
+        ["Documentation", "3001", "Docusaurus Docs"],
+        ["Database", "Local", "SQLite File"]
+      ]
+    }
+  }
+];
+
+<ComplexityCards cards={setupCards} />
 
 Comprehensive technical guide to setting up the Seat Allocation System development environment.
 
@@ -209,6 +253,41 @@ To use real student names instead of counts:
 2. Click **Export PDF** button
 3. PDF downloads to your device
 4. Click **Attendance Sheet** to download signature lists per-batch
+
+### 5. Master Plan Page Setup (v2.4 New Feature)
+
+The Master Plan feature generates comprehensive institutional seating plans with form pre-population and multi-room support.
+
+**Access Master Plan:**
+1. Log in to the application
+2. Navigate to **Master Plan** in the sidebar
+3. Fill in the form:
+   - **Plan Name**: e.g., "Mid-Semester Exam Plan"
+   - **Select Template**: Choose from pre-configured templates
+   - **Institution**: Your institution name (auto-fills from config)
+   - **Exam Date**: Select the exam date
+   - **Invigilators**: Add faculty member names
+
+**Generate Master Plan:**
+1. Click **Load Template Config** to pre-populate form fields
+2. Select rooms for seating allocation
+3. Click **Generate Master Plan**
+4. System generates PDF with:
+   - Institutional branding and headers
+   - Branch-wise room allocation
+   - Seating layouts per room
+   - Invigilator assignments
+
+**Export Options:**
+- **Download PDF**: Complete master plan with all rooms and seating
+- **Email Plan**: Send to institutional email (if configured)
+- **Share Link**: Generate shareable plan link with access control
+
+**Master Plan API Endpoints:**
+- `POST /api/generate-master-plan` - Create new master plan
+- `GET /api/plan-batches/{plan_id}` - Retrieve plan metadata
+- `GET /api/template/config` - Get template pre-fill defaults
+- `POST /api/master-plan/export` - Export plan as PDF (v2.4+)
 
 ## Configuration
 
@@ -437,5 +516,4 @@ $ cd Frontend && npm start
 
 ---
 
-**Version**: 2.3 <span style={{ backgroundColor: '#f97316', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '0.6rem' }}>NEW UPDATE</span>  
-**Last Updated**: January 24, 2026
+**v2.4 | Updated: February 2026**

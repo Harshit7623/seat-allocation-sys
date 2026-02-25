@@ -4,6 +4,7 @@ import {
   FileText, Download, Loader2, ArrowLeft, Building2,
   Users, Monitor, PenTool, Calendar, AlertCircle, CheckCircle2
 } from 'lucide-react';
+import { getToken } from '../utils/tokenStorage';
 import SplitText from '../components/SplitText';
 
 const MasterPlanPage = ({ showToast }) => {
@@ -35,20 +36,26 @@ const MasterPlanPage = ({ showToast }) => {
       setPlanError(null);
 
       try {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
-        // Load cache snapshot info
-        const planRes = await fetch(`/api/plans/${planId}/details`, { headers });
+        // Load plan info from plan-batches endpoint (existing)
+        const planRes = await fetch(`/api/plan-batches/${planId}`, { headers });
         if (planRes.ok) {
           const planData = await planRes.json();
-          if (planData.success) {
-            setPlanInfo(planData.plan);
-          }
+          const meta = planData.metadata || {};
+          const rooms = planData.rooms || {};
+          setPlanInfo({
+            total_students: meta.total_students || Object.values(rooms).reduce((sum, r) => 
+              sum + Object.values(r.batches || {}).reduce((s, b) => s + (b.students?.length || 0), 0), 0),
+            room_count: meta.active_rooms?.length || Object.keys(rooms).length,
+            status: meta.status || '—',
+            batch_count: Object.values(rooms).reduce((sum, r) => sum + Object.keys(r.batches || {}).length, 0),
+          });
         }
 
-        // Load template to prefill form
-        const tplRes = await fetch('/api/templates/active', { headers });
+        // Load template config to prefill form (existing endpoint)
+        const tplRes = await fetch('/api/template/config', { headers });
         if (tplRes.ok) {
           const tplData = await tplRes.json();
           if (tplData.success && tplData.template) {
@@ -74,7 +81,7 @@ const MasterPlanPage = ({ showToast }) => {
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch('/api/generate-master-plan', {
         method: 'POST',
         headers: {

@@ -6,7 +6,7 @@ import SplitText from '../components/SplitText';
 import { 
   Upload, Layout, Monitor, Clock, ArrowRight, Loader2, AlertCircle, 
   CheckCircle2, Users, Download, Eye, RefreshCw, X, FileText, 
-  BarChart3, Wrench, Building2
+  BarChart3, Wrench, Building2, FileSpreadsheet
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -864,6 +864,13 @@ const CreatePlan = ({ showToast }) => {
                   >
                     <BarChart3 size={18} />
                     Generate Master Plan
+                  </button>
+                  <button
+                    onClick={() => navigate(`/excel-export/${planDetails.plan_id}`)}
+                    className="w-full px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-emerald-500/25"
+                  >
+                    <FileSpreadsheet size={18} />
+                    Export to Excel
                   </button>
                   <button
                     onClick={closePlanViewer}
