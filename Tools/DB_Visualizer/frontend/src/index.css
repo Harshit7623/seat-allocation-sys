@@ -1,0 +1,141 @@
+/* React Flow styles */
+@import 'reactflow/dist/style.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
+    'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f9fafb;
+  color: #1f2937;
+  cursor: auto;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+html.dark body {
+  background-color: #0f172a;
+  color: #e2e8f0;
+  cursor: auto;
+}
+
+code {
+  font-family: 'SFMono-Regular', 'Menlo', 'Monaco', 'Courier New', monospace;
+}
+
+/* Light theme - cursor dark */
+html.light {
+  cursor: auto;
+}
+
+html.light * {
+  cursor: auto;
+}
+
+/* React Flow custom styles - Light theme */
+html.light .react-flow__minimap {
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+html.light .react-flow__controls {
+  display: flex;
+  gap: 8px;
+}
+
+html.light .react-flow__controls-button {
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  color: #374151;
+}
+
+html.light .react-flow__controls-button:hover {
+  background-color: #f3f4f6;
+  border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* React Flow custom styles - Dark theme */
+html.dark .react-flow__minimap {
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+}
+
+html.dark .react-flow__controls {
+  display: flex;
+  gap: 8px;
+}
+
+html.dark .react-flow__controls-button {
+  background-color: #1e293b;
+  border: 2px solid #fb923c;
+  border-radius: 6px;
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 12px rgba(251, 146, 60, 0.4), inset 0 0 8px rgba(251, 146, 60, 0.2);
+  color: #cbd5e1;
+}
+
+html.dark .react-flow__controls-button svg {
+  filter: drop-shadow(0 0 4px rgba(251, 146, 60, 0.6));
+  transition: filter 0.3s ease;
+}
+
+html.dark .react-flow__controls-button:hover {
+  background-color: #334155;
+  border-color: #fbbf24;
+  box-shadow: 0 0 20px rgba(251, 146, 60, 0.6), inset 0 0 12px rgba(251, 146, 60, 0.3);
+  transform: scale(1.05);
+}
+
+html.dark .react-flow__controls-button:hover svg {
+  filter: drop-shadow(0 0 8px rgba(251, 146, 60, 0.9));
+}
+
+.react-flow__controls-button:active {
+  transform: scale(0.95);
+}
+
+/* Smooth transitions */
+* {
+  transition: color 0.3s ease, background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Animation for entrance */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Apply animations */
+body {
+  animation: fadeIn 0.5s ease-in;
+}
