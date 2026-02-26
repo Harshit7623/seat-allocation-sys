@@ -14,7 +14,7 @@ from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-from algo.auth_service import token_required
+from algo.services.auth_service import token_required
 from algo.core.cache.cache_manager import CacheManager
 
 excel_export_bp = Blueprint('excel_export', __name__, url_prefix='/api')
