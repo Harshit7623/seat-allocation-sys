@@ -1,6 +1,6 @@
 # api/blueprints/students.py - FIXED VERSION
 from flask import Blueprint, request, jsonify
-from algo.auth_service import token_required
+from algo.services.auth_service import token_required
 import logging
 import os
 import json

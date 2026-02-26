@@ -10,55 +10,39 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 algo_dir = os.path.join(script_dir, '..')
 project_root = os.path.join(algo_dir, '..')
 
-# Users are in algo/user_auth.db
-auth_db_path = os.path.join(algo_dir, 'user_auth.db')
-# Allocation data is in project_root/demo.db (Config.DB_PATH = BASE_DIR / "demo.db")
-data_db_path = os.path.join(project_root, 'demo.db')
+# Consolidated database at project root
+db_path = os.path.join(project_root, 'demo.db')
 
-print(f"📂 Auth DB: {os.path.abspath(auth_db_path)} (exists: {os.path.exists(auth_db_path)})")
-print(f"📂 Data DB: {os.path.abspath(data_db_path)} (exists: {os.path.exists(data_db_path)})")
+print(f"📂 Database: {os.path.abspath(db_path)} (exists: {os.path.exists(db_path)})")
 
-if not os.path.exists(auth_db_path):
-    print("❌ Auth database not found!")
+if not os.path.exists(db_path):
+    print("❌ Database not found!")
     sys.exit(1)
 
-# ── USERS ──
-auth_conn = sqlite3.connect(auth_db_path)
-auth_conn.row_factory = sqlite3.Row
+conn = sqlite3.connect(db_path)
+conn.row_factory = sqlite3.Row
 
+# ── USERS ──
 print("\n" + "=" * 80)
 print("📋 REGISTERED USERS")
 print("=" * 80)
 
-cur = auth_conn.execute("SELECT id, username, email, role, created_at FROM users ORDER BY id")
+cur = conn.execute("SELECT id, username, email, role, auth_provider, created_at FROM users ORDER BY id")
 users = cur.fetchall()
 
 if not users:
     print("No users found!")
 else:
-    print(f"{'ID':<6} {'Username':<20} {'Email':<35} {'Role':<10} {'Created'}")
-    print("-" * 80)
+    print(f"{'ID':<6} {'Username':<20} {'Email':<35} {'Role':<10} {'Auth':<8} {'Created'}")
+    print("-" * 90)
     for user in users:
         created = user['created_at'] or 'N/A'
-        print(f"{user['id']:<6} {user['username']:<20} {user['email']:<35} {user['role']:<10} {created}")
+        auth = user['auth_provider'] or 'local'
+        print(f"{user['id']:<6} {user['username']:<20} {user['email']:<35} {user['role']:<10} {auth:<8} {created}")
 
 print(f"\nTotal Users: {len(users)}")
-auth_conn.close()
 
 # ── DATA OWNERSHIP ──
-if not os.path.exists(data_db_path):
-    print(f"\n❌ Data database not found at {data_db_path}")
-    sys.exit(1)
-
-conn = sqlite3.connect(data_db_path)
-conn.row_factory = sqlite3.Row
-
-# Re-read users from auth DB for the loop
-auth_conn2 = sqlite3.connect(auth_db_path)
-auth_conn2.row_factory = sqlite3.Row
-users = auth_conn2.execute("SELECT id, username, email FROM users ORDER BY id").fetchall()
-auth_conn2.close()
-
 print("\n" + "=" * 80)
 print("📊 DATA OWNERSHIP SUMMARY")
 print("=" * 80)

@@ -5,40 +5,56 @@ from algo.core.cache.cache_manager import CacheManager
 from algo.core.algorithm.seating import SeatingAlgorithm
 from algo.utils.helpers import parse_str_dict, parse_int_dict
 from algo.database.db import get_db_connection
-from algo.auth_service import token_required
+from algo.services.auth_service import token_required
 import uuid
 import sqlite3
 
 allocation_bp = Blueprint('allocations', __name__, url_prefix='/api')
 
+# Module-level singleton — avoid re-instantiating per request
+CACHE_MGR = CacheManager()
+
 # ============================================================================
-# HELPER: Get pending students for a session
+# HELPER: Get pending students for a session (delegates to query layer)
 # ============================================================================
 def get_pending_students(session_id):
     """Get students not yet allocated in this session"""
-    try:
+    from algo.database.queries.student_queries import StudentQueries
+    return StudentQueries.get_pending_students(session_id)
+
+
+def _get_verified_session(session_id, user_id, conn=None, fields='plan_id, user_id, status'):
+    """
+    Fetch a session row and verify ownership in one call.
+    Returns (session_dict, error_response) — if error_response is not None, return it.
+    
+    Usage:
+        session, err = _get_verified_session(session_id, request.user_id, conn)
+        if err: return err
+        plan_id = session['plan_id']
+    """
+    close_conn = False
+    if conn is None:
         conn = get_db_connection()
         conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
-        
-        cur.execute("""
-            SELECT DISTINCT s.id, s.enrollment, s.name, s.batch_name, s.batch_id, s.batch_color
-            FROM students s
-            JOIN uploads u ON s.upload_id = u.id
-            WHERE u.session_id = ?
-            AND s.id NOT IN (
-                SELECT student_id FROM allocations
-                WHERE session_id = ?
-            )
-            ORDER BY s.batch_name, s.enrollment
-        """, (session_id, session_id))
-        
-        pending = [dict(row) for row in cur.fetchall()]
-        conn.close()
-        return pending
-    except Exception as e:
-        print(f"Error fetching pending students: {e}")
-        return []
+        close_conn = True
+    
+    cur = conn.cursor()
+    cur.execute(f"SELECT {fields} FROM allocation_sessions WHERE session_id = ?", (session_id,))
+    row = cur.fetchone()
+    
+    if not row:
+        if close_conn: conn.close()
+        return None, (jsonify({"status": "error", "message": "Session not found"}), 404)
+    
+    session = dict(row)
+    owner_id = session.get('user_id')
+    
+    if owner_id is not None and owner_id != user_id:
+        if close_conn: conn.close()
+        return None, (jsonify({"status": "error", "message": "Unauthorized"}), 403)
+    
+    return session, None
 
 # ============================================================================
 # POST /api/generate-seating - SESSION-BASED SEATING GENERATION
@@ -221,29 +237,25 @@ def generate_seating():
             'broken_seats': broken_seats
         }
 
-        # [STEP 1] Check if seating for THIS plan and THIS room exists in cache
-        try:
-            cache_manager = CacheManager()
-            target_room = data.get('room_no') or data.get('room_name') or "N/A"
-            
-            # Use the session-specific plan_id if available
-            current_plan_id = plan_id
-            if session_id:
-                try:
-                    db_conn = get_db_connection()
-                    db_cur = db_conn.cursor()
-                    db_cur.execute("SELECT plan_id FROM allocation_sessions WHERE session_id = ? AND user_id = ?", (session_id, request.user_id))
-                    row = db_cur.fetchone()
-                    if row and row[0]:
-                        current_plan_id = row[0]
-                    db_conn.close()
-                except: pass
+        # [STEP 0] Resolve session plan_id ONCE (fixes double-lookup)
+        if session_id:
+            try:
+                db_conn = get_db_connection()
+                db_cur = db_conn.cursor()
+                db_cur.execute("SELECT plan_id FROM allocation_sessions WHERE session_id = ? AND user_id = ?", (session_id, request.user_id))
+                row = db_cur.fetchone()
+                if row and row[0]:
+                    plan_id = row[0]
+                    print(f"✅ Using Session Plan ID: {plan_id}")
+                db_conn.close()
+            except: pass
 
-            # Load existing cache just to verify it exists/get metadata
-            # But DO NOT return early - let generation proceed to allow overwrites/experiments
-            cached_data = cache_manager.load_snapshot(current_plan_id)
+        # [STEP 1] Check if seating for THIS plan and THIS room exists in cache
+        target_room = data.get('room_no') or data.get('room_name') or "N/A"
+        try:
+            cached_data = CACHE_MGR.load_snapshot(plan_id)
             if cached_data:
-                print(f"📂 [L1-CACHE] Found existing plan {current_plan_id}, will update room: {target_room}")
+                print(f"📂 [L1-CACHE] Found existing plan {plan_id}, will update room: {target_room}")
         except Exception as cache_lookup_err:
             print(f"⚠️ Cache info retrieval failed: {cache_lookup_err}")
 
@@ -266,18 +278,6 @@ def generate_seating():
             serial_width=int(data.get("serial_width", 0)),
             allow_adjacent_same_batch=bool(data.get("allow_adjacent_same_batch", False))
         )
-        
-        if session_id:
-            try:
-                db_conn = get_db_connection()
-                db_cur = db_conn.cursor()
-                db_cur.execute("SELECT plan_id FROM allocation_sessions WHERE session_id = ? AND user_id = ?", (session_id, request.user_id))
-                row = db_cur.fetchone()
-                if row and row[0]:
-                    plan_id = row[0]
-                    print(f"✅ Using Session Plan ID for generation: {plan_id}")
-                db_conn.close()
-            except: pass
 
         # Generate seating
         algo.generate_seating()
@@ -304,8 +304,7 @@ def generate_seating():
         room_name = data.get('room_no') or data.get('room_name') or "N/A"
         try:
             print(f"DEBUG: Attempting cache update for plan {plan_id}, room {room_name}")
-            cache_manager = CacheManager()
-            cache_manager.save_or_update(
+            CACHE_MGR.save_or_update(
                 plan_id=plan_id, 
                 input_config=seating_room_config, 
                 output_data=web, 
@@ -316,7 +315,7 @@ def generate_seating():
             # If still failing, try using raw data as fallback
             try:
                 print("DEBUG: Retrying with raw data...")
-                cache_manager.save_or_update(plan_id, data, web, room_name)
+                CACHE_MGR.save_or_update(plan_id, data, web, room_name)
             except: pass
         
         print(f"✅ Seating generated for: {selected_batch_names}")
@@ -481,11 +480,8 @@ def reset_allocation():
         cur = conn.cursor()
         
         # Verify ownership
-        cur.execute("SELECT user_id FROM allocation_sessions WHERE session_id = ?", (session_id,))
-        owner = cur.fetchone()
-        if not owner or owner[0] != request.user_id:
-            conn.close()
-            return jsonify({"status": "error", "message": "Unauthorized"}), 403
+        session, err = _get_verified_session(session_id, request.user_id, conn, fields='user_id')
+        if err: return err
 
         cur.execute("DELETE FROM allocations WHERE session_id = ?", (session_id,))
         cur.execute("""
@@ -542,25 +538,13 @@ def add_external_student(session_id, room_no):
         cur = conn.cursor()
         
         # 1. Verify session exists and user owns it
-        cur.execute("""
-            SELECT plan_id, user_id, status FROM allocation_sessions 
-            WHERE session_id = ?
-        """, (session_id,))
-        session_row = cur.fetchone()
+        session, err = _get_verified_session(session_id, request.user_id, conn, fields='plan_id, user_id, status')
+        if err: return err
         
-        if not session_row:
-            conn.close()
-            return jsonify({"status": "error", "message": "Session not found"}), 404
-        
-        plan_id, owner_id, status = session_row['plan_id'], session_row['user_id'], session_row['status']
-        
-        if owner_id != request.user_id:
-            conn.close()
-            return jsonify({"status": "error", "message": "Unauthorized"}), 403
+        plan_id, status = session['plan_id'], session['status']
         
         # 2. Load cache and verify seat is empty
-        cache_manager = CacheManager()
-        cached_data = cache_manager.load_snapshot(plan_id)
+        cached_data = CACHE_MGR.load_snapshot(plan_id)
         
         if not cached_data or 'rooms' not in cached_data:
             conn.close()
@@ -640,7 +624,7 @@ def add_external_student(session_id, room_no):
         }
         
         # Patch the cache
-        cache_manager.patch_seat(plan_id, room_no, seat_row, seat_col, new_seat_data)
+        CACHE_MGR.patch_seat(plan_id, room_no, seat_row, seat_col, new_seat_data)
         
         return jsonify({
             "status": "success",
@@ -671,20 +655,10 @@ def remove_external_student(session_id, room_no):
         cur = conn.cursor()
         
         # Verify ownership
-        cur.execute("""
-            SELECT plan_id, user_id FROM allocation_sessions WHERE session_id = ?
-        """, (session_id,))
-        session_row = cur.fetchone()
+        session, err = _get_verified_session(session_id, request.user_id, conn, fields='plan_id, user_id')
+        if err: return err
         
-        if not session_row:
-            conn.close()
-            return jsonify({"status": "error", "message": "Session not found"}), 404
-        
-        if session_row['user_id'] != request.user_id:
-            conn.close()
-            return jsonify({"status": "error", "message": "Unauthorized"}), 403
-        
-        plan_id = session_row['plan_id']
+        plan_id = session['plan_id']
         
         # Get the external student record
         cur.execute("""
@@ -709,7 +683,6 @@ def remove_external_student(session_id, room_no):
         conn.close()
         
         # Restore seat to unallocated state in cache
-        cache_manager = CacheManager()
         empty_seat_data = {
             "position": seat_position,
             "batch": None,
@@ -725,7 +698,7 @@ def remove_external_student(session_id, room_no):
             "color": "#F3F4F6"
         }
         
-        cache_manager.patch_seat(plan_id, room_no, seat_row, seat_col, empty_seat_data)
+        CACHE_MGR.patch_seat(plan_id, room_no, seat_row, seat_col, empty_seat_data)
         
         return jsonify({
             "status": "success",
@@ -750,16 +723,8 @@ def get_external_students(session_id):
         cur = conn.cursor()
         
         # Verify ownership
-        cur.execute("SELECT user_id FROM allocation_sessions WHERE session_id = ?", (session_id,))
-        session_row = cur.fetchone()
-        
-        if not session_row:
-            conn.close()
-            return jsonify({"status": "error", "message": "Session not found"}), 404
-        
-        if session_row['user_id'] != request.user_id:
-            conn.close()
-            return jsonify({"status": "error", "message": "Unauthorized"}), 403
+        session, err = _get_verified_session(session_id, request.user_id, conn, fields='user_id')
+        if err: return err
         
         if room_no:
             cur.execute("""
@@ -830,22 +795,13 @@ def get_empty_seats(session_id, room_no):
         cur = conn.cursor()
         
         # Verify ownership
-        cur.execute("SELECT plan_id, user_id FROM allocation_sessions WHERE session_id = ?", (session_id,))
-        session_row = cur.fetchone()
+        session, err = _get_verified_session(session_id, request.user_id, conn, fields='plan_id, user_id')
+        if err: return err
         
-        if not session_row:
-            conn.close()
-            return jsonify({"status": "error", "message": "Session not found"}), 404
-        
-        if session_row['user_id'] != request.user_id:
-            conn.close()
-            return jsonify({"status": "error", "message": "Unauthorized"}), 403
-        
-        plan_id = session_row['plan_id']
+        plan_id = session['plan_id']
         conn.close()
         
-        cache_manager = CacheManager()
-        empty_seats = cache_manager.get_empty_seats(plan_id, room_no)
+        empty_seats = CACHE_MGR.get_empty_seats(plan_id, room_no)
         
         return jsonify({
             "status": "success",
@@ -867,22 +823,13 @@ def get_room_batches(session_id, room_no):
         cur = conn.cursor()
         
         # Verify ownership
-        cur.execute("SELECT plan_id, user_id FROM allocation_sessions WHERE session_id = ?", (session_id,))
-        session_row = cur.fetchone()
+        session, err = _get_verified_session(session_id, request.user_id, conn, fields='plan_id, user_id')
+        if err: return err
         
-        if not session_row:
-            conn.close()
-            return jsonify({"status": "error", "message": "Session not found"}), 404
-        
-        if session_row['user_id'] != request.user_id:
-            conn.close()
-            return jsonify({"status": "error", "message": "Unauthorized"}), 403
-        
-        plan_id = session_row['plan_id']
+        plan_id = session['plan_id']
         conn.close()
         
-        cache_manager = CacheManager()
-        cached_data = cache_manager.load_snapshot(plan_id, silent=True)
+        cached_data = CACHE_MGR.load_snapshot(plan_id, silent=True)
         
         if not cached_data or 'rooms' not in cached_data or room_no not in cached_data['rooms']:
             return jsonify({"status": "success", "batches": []}), 200

@@ -1,0 +1,435 @@
+# Authentication service providing JWT-based security and user management.
+# Handles login, signup, role-based access control, and Google OAuth integration.
+import sqlite3
+import os
+import secrets
+from datetime import datetime, timedelta, timezone
+import jwt
+import bcrypt
+from typing import Tuple, Optional, Dict
+from dotenv import load_dotenv
+
+# For Google OAuth
+try:
+    from google.auth.transport import requests
+    from google.oauth2 import id_token
+    GOOGLE_AUTH_AVAILABLE = True
+except ImportError:
+    GOOGLE_AUTH_AVAILABLE = False
+    print("⚠️  Google auth library not installed. Run: pip install google-auth")
+
+# Load environment variables
+load_dotenv()
+
+# ============================================================================
+# CONFIGURATION & INITIALIZATION
+# ============================================================================
+
+from algo.config.settings import Config
+
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-stable-secret-key-change-in-prod")
+JWT_ALGORITHM = "HS256"
+TOKEN_EXPIRATION_DAYS = 7
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+
+# Production safety check
+if os.getenv('FLASK_ENV') == 'production' and JWT_SECRET_KEY == "dev-stable-secret-key-change-in-prod":
+    print("⚠️  CRITICAL: Using default JWT_SECRET_KEY in production! Set JWT_SECRET_KEY env variable.")
+
+def _get_conn():
+    """Get a standalone connection to the consolidated database."""
+    conn = sqlite3.connect(str(Config.DB_PATH), timeout=20)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+# ============================================================================
+# ADMIN EMAIL LIST (Add admin emails here)
+# ============================================================================
+# When a user signs in with Google using these emails, they get ADMIN role
+ADMIN_EMAILS = [
+    # Add admin emails here
+]
+
+def token_required(f):
+    """Decorator to require valid JWT token"""
+    from functools import wraps
+    from flask import request, jsonify
+    
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        if 'Authorization' in request.headers:
+            auth_header = request.headers['Authorization']
+            if auth_header.startswith('Bearer '):
+                token = auth_header.split(" ")[1]
+        
+        if not token:
+            return jsonify({'message': 'Token is missing!'}), 401
+            
+        try:
+            payload = verify_token(token)
+            if not payload:
+                return jsonify({'message': 'Token is invalid or expired!'}), 401
+            
+            # Set user info on request object
+            request.user_id = payload.get('user_id')
+            request.user_role = payload.get('role')
+        except Exception as e:
+            return jsonify({'message': f'Error verifying token: {str(e)}'}), 401
+            
+        return f(*args, **kwargs)
+    
+    return decorated
+
+def admin_required(f):
+    """Decorator to require ADMIN role. Must be used AFTER @token_required."""
+    from functools import wraps
+    from flask import request, jsonify
+    
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user_role = getattr(request, 'user_role', None)
+        if user_role != 'ADMIN':
+            return jsonify({'status': 'error', 'message': 'Admin access required'}), 403
+        return f(*args, **kwargs)
+    
+    return decorated
+
+# No separate init needed — schema.py handles the unified users table via ensure_demo_db()
+
+# ============================================================================
+# JWT HANDLERS
+# ============================================================================
+
+def create_auth_token(user_id: int, role: str) -> str:
+    """Create JWT token for user"""
+    expiration_time = datetime.now(timezone.utc) + timedelta(days=TOKEN_EXPIRATION_DAYS)
+    payload = {
+        'exp': expiration_time,
+        'iat': datetime.now(timezone.utc),
+        'sub': str(user_id),
+        'user_id': user_id,
+        'role': role
+    }
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+def verify_token(token: str) -> Optional[Dict]:
+    """Verify JWT token"""
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        return payload
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None
+
+# ============================================================================
+# USER HELPERS
+# ============================================================================
+
+def get_user_by_email(email: str) -> Optional[Dict]:
+    """Get user by email address"""
+    try:
+        conn = _get_conn()
+        row = conn.execute(
+            "SELECT id, username, email, password_hash, role, full_name, auth_provider FROM users WHERE email = ?", 
+            (email,)
+        ).fetchone()
+        conn.close()
+        return dict(row) if row else None
+    except Exception as e:
+        print(f"Auth DB Error: {e}")
+    return None
+
+def get_user_by_id(user_id: int) -> Optional[Dict]:
+    """Get user by ID"""
+    try:
+        conn = _get_conn()
+        row = conn.execute(
+            "SELECT id, username, email, role, full_name, auth_provider FROM users WHERE id = ?", 
+            (user_id,)
+        ).fetchone()
+        conn.close()
+        if row:
+            return {
+                "id": row["id"],
+                "username": row["username"],
+                "email": row["email"],
+                "role": row["role"],
+                "fullName": row["full_name"],
+                "auth_provider": row["auth_provider"]
+            }
+    except Exception as e:
+        print(f"Auth DB Error: {e}")
+    return None
+
+def get_user_by_google_id(google_id: str) -> Optional[Dict]:
+    """Get user by Google ID"""
+    try:
+        conn = _get_conn()
+        row = conn.execute(
+            "SELECT id, username, email, role, full_name FROM users WHERE google_id = ?", 
+            (google_id,)
+        ).fetchone()
+        conn.close()
+        if row:
+            return {
+                "id": row["id"],
+                "username": row["username"],
+                "email": row["email"],
+                "role": row["role"],
+                "fullName": row["full_name"],
+            }
+    except Exception as e:
+        print(f"Auth DB Error: {e}")
+    return None
+
+def get_user_by_token(token: str) -> Optional[Dict]:
+    """Get user info from JWT token"""
+    payload = verify_token(token)
+    if not payload: 
+        return None
+    
+    user_id = payload.get('user_id')
+    try:
+        conn = _get_conn()
+        row = conn.execute(
+            "SELECT id, username, email, role, full_name FROM users WHERE id = ?",
+            (user_id,)
+        ).fetchone()
+        conn.close()
+        if row:
+            return {
+                "id": row["id"],
+                "username": row["username"],
+                "email": row["email"],
+                "role": row["role"],
+                "fullName": row["full_name"],
+            }
+    except Exception as e:
+        print(f"Auth DB Error: {e}")
+    return None
+
+# ============================================================================
+# AUTH FUNCTIONS
+# ============================================================================
+
+def signup(username: str, email: str, password: str, role: str = "STUDENT") -> Tuple[bool, Dict, str]:
+    """
+    Sign up a new user with email/password
+    
+    Returns:
+        (success: bool, user_data: dict or error_msg: str, token: str or empty_string)
+    """
+    if not username or not email or not password:
+        return False, "All fields are required.", ""
+    
+    if get_user_by_email(email):
+        return False, "User with this email already exists.", ""
+    
+    password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    try:
+        conn = _get_conn()
+        cursor = conn.execute(
+            """INSERT INTO users 
+               (username, email, password_hash, role, auth_provider) 
+               VALUES (?, ?, ?, ?, ?)""",
+            (username, email, password_hash, role.upper(), 'local')
+        )
+        conn.commit()
+        user_id = cursor.lastrowid
+        conn.close()
+        
+        # Create auth token immediately
+        token = create_auth_token(user_id, role.upper())
+        
+        user_data = {
+            "id": user_id,
+            "username": username,
+            "email": email,
+            "role": role.upper(),
+            "fullName": "",
+        }
+        
+        print(f"✅ User registered: {email}")
+        return True, user_data, token  # ✅ Consistent format
+        
+    except sqlite3.Error as e:
+        error_msg = f"Database error: {str(e)}"
+        print(f"❌ Signup error: {error_msg}")
+        return False, error_msg, ""  # ✅ Return error message in 2nd position
+
+def login(email: str, password: str) -> Tuple[bool, Optional[Dict], str]:
+    """Login user with email/password"""
+    user = get_user_by_email(email)
+    if not user:
+        return False, "Invalid email or password.", ""
+    
+    # Check password
+    if not user.get('password_hash'):
+        return False, "User registered via Google. Use Google sign-in.", ""
+    
+    if bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
+        token = create_auth_token(user['id'], user['role'])
+        user_data = {
+            "id": user['id'],
+            "username": user['username'],
+            "email": user['email'],
+            "role": user['role'],
+            "fullName": user.get("full_name"),
+        }
+        return True, user_data, token
+    else:
+        return False, "Invalid email or password.", ""
+
+def update_user_profile(user_id: int, username: str = None, email: str = None) -> Tuple[bool, str]:
+    """Update user profile (username and email only)"""
+    updates = []
+    params = []
+    
+    if username:
+        updates.append("username = ?")
+        params.append(username)
+    if email:
+        updates.append("email = ?")
+        params.append(email)
+        
+    if not updates: 
+        return False, "No data provided."
+    
+    # Add updated_at timestamp
+    updates.append("updated_at = CURRENT_TIMESTAMP")
+    query = f"UPDATE users SET {', '.join(updates)} WHERE id = ?"
+    params.append(user_id)
+    
+    try:
+        conn = _get_conn()
+        conn.execute(query, tuple(params))
+        conn.commit()
+        conn.close()
+        return True, "Profile updated successfully."
+    except sqlite3.Error as e:
+        return False, f"Update failed: {str(e)}"
+
+# ============================================================================
+# GOOGLE OAUTH (WITH ADMIN ROLE SUPPORT)
+# ============================================================================
+
+def google_auth_handler(token: str) -> Tuple[bool, Optional[Dict], str]:
+    """
+    Handle Google OAuth token verification and user creation/update.
+    Users with emails in ADMIN_EMAILS list get ADMIN role.
+    """
+    
+    if not GOOGLE_AUTH_AVAILABLE:
+        return False, "Google auth library not installed", ""
+    
+    if not GOOGLE_CLIENT_ID:
+        return False, "Google Client ID not configured", ""
+    
+    try:
+        # Verify Google token
+        idinfo = id_token.verify_oauth2_token(token, requests.Request(), GOOGLE_CLIENT_ID)
+        
+        google_id = idinfo.get('sub')
+        email = idinfo.get('email')
+        full_name = idinfo.get('name', '')
+        picture = idinfo.get('picture')
+        
+        if not google_id or not email:
+            return False, "Invalid Google token", ""
+        
+        # ========== DETERMINE ROLE ==========
+        # Check if email is in admin list OR default to ADMIN for Google sign-in
+        if email.lower() in [admin_email.lower() for admin_email in ADMIN_EMAILS]:
+            user_role = 'ADMIN'
+            print(f"👑 Admin user detected (in ADMIN_EMAILS): {email}")
+        else:
+            user_role = 'ADMIN'  # Default to ADMIN for Google OAuth users
+            print(f"👑 Google sign-in user defaulting to ADMIN: {email}")
+        
+        # Check if user exists by email
+        existing_user = get_user_by_email(email)
+        
+        if existing_user:
+            # User already exists
+            user = existing_user
+            user_id = user['id']
+            
+            # Update google_id if not set, and update role if needed
+            try:
+                conn = _get_conn()
+                
+                updates = []
+                params = []
+                
+                if not existing_user.get('google_id'):
+                    updates.append("google_id = ?")
+                    params.append(google_id)
+                
+                # Update role if user was STUDENT and is now in ADMIN list
+                if existing_user.get('role') == 'STUDENT' and user_role == 'ADMIN':
+                    updates.append("role = ?")
+                    params.append('ADMIN')
+                    print(f"📝 Updated {email} to ADMIN role")
+                
+                if updates:
+                    updates.append("auth_provider = 'google'")
+                    query = f"UPDATE users SET {', '.join(updates)} WHERE id = ?"
+                    params.append(user_id)
+                    conn.execute(query, tuple(params))
+                    conn.commit()
+                
+                conn.close()
+            except Exception as e:
+                print(f"Warning: Could not update user: {e}")
+            
+            # Use actual role from database
+            user_role = existing_user.get('role', user_role)
+        else:
+            # Create new user from Google data
+            username = email.split('@')[0]  # Use email prefix as username
+            
+            try:
+                conn = _get_conn()
+                cursor = conn.execute(
+                    """INSERT INTO users 
+                       (username, email, full_name, auth_provider, google_id, role) 
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (username, email, full_name, 'google', google_id, user_role)
+                )
+                conn.commit()
+                user_id = cursor.lastrowid
+                conn.close()
+                
+                role_text = "ADMIN 👑" if user_role == 'ADMIN' else "STUDENT"
+                print(f"✅ New user created: {email} ({role_text})")
+            except sqlite3.Error as e:
+                return False, f"Database error: {str(e)}", ""
+            
+            user = {
+                "id": user_id,
+                "username": username,
+                "email": email,
+                "role": user_role,
+                "full_name": full_name,
+            }
+        
+        # Create JWT token
+        auth_token = create_auth_token(user_id, user_role)
+        
+        user_data = {
+            "id": user.get('id', user_id),
+            "username": user.get('username', email.split('@')[0]),
+            "email": user.get('email', email),
+            "role": user_role,
+            "fullName": user.get('full_name', full_name),
+        }
+        
+        return True, user_data, auth_token
+        
+    except Exception as e:
+        print(f"Google auth error: {e}")
+        return False, f"Google authentication failed: {str(e)}", ""
+
+if __name__ == "__main__":
+    print("✅ Auth service module loaded successfully")

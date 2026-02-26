@@ -5,7 +5,7 @@ import sqlite3
 import json
 from algo.config.settings import Config
 from algo.database.db import get_db_connection
-from algo.auth_service import token_required
+from algo.services.auth_service import token_required
 
 classrooms_bp = Blueprint('classrooms', __name__, url_prefix='/api/classrooms')
 

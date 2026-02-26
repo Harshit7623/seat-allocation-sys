@@ -91,3 +91,19 @@ class StudentQueries:
             ORDER BY u.created_at DESC
         """, (session_id,))
         return [dict(row) for row in cursor.fetchall()]
+
+    @staticmethod
+    def get_pending_students(session_id: int) -> List[Dict]:
+        """Get students not yet allocated in this session."""
+        db = get_db()
+        cursor = db.execute("""
+            SELECT DISTINCT s.id, s.enrollment, s.name, s.batch_name, s.batch_id, s.batch_color
+            FROM students s
+            JOIN uploads u ON s.upload_id = u.id
+            WHERE u.session_id = ?
+            AND s.id NOT IN (
+                SELECT student_id FROM allocations WHERE session_id = ?
+            )
+            ORDER BY s.batch_name, s.enrollment
+        """, (session_id, session_id))
+        return [dict(row) for row in cursor.fetchall()]

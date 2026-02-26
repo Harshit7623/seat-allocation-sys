@@ -3,6 +3,11 @@
 import sys
 import os
 
+# Ensure UTF-8 output on Windows (emoji in log messages)
+if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+
 # Add parent directory to path to allow importing 'algo' package if running directly
 # This ensures that 'from algo.main import app' works even if running 'python algo/app.py'
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

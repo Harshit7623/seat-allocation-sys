@@ -9,11 +9,12 @@ from datetime import datetime, timedelta
 import sqlite3
 import random
 import string
-from algo.auth_service import token_required
+from algo.services.auth_service import token_required
 
 # Service layer imports (Phase 1 migration)
 from algo.services import SessionService, AllocationService
 from algo.core.cache.cache_manager import CacheManager
+from algo.database.queries.allocation_queries import AllocationQueries
 
 CACHE_MGR = CacheManager()
 
@@ -39,7 +40,7 @@ def _get_user_id():
     if auth_header.startswith('Bearer '):
         token = auth_header.split(' ')[1]
         try:
-            from algo.auth_service import verify_token
+            from algo.services.auth_service import verify_token
             payload = verify_token(token)
             if payload and payload.get('user_id'):
                 return payload['user_id']
@@ -81,100 +82,6 @@ def _verify_session_owner(session_id: int, user_id: int) -> bool:
     return False
 
 
-def _get_session_stats(session_id):
-    """Get allocation statistics for a session"""
-    conn = _get_conn()
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    
-    try:
-        # Overall stats
-        cur.execute("""
-            SELECT total_students, allocated_count, status, plan_id
-            FROM allocation_sessions
-            WHERE session_id = ?
-        """, (session_id,))
-        
-        session_row = cur.fetchone()
-        if not session_row:
-            return None
-        
-        session_data = dict(session_row)
-        
-        # Per-room stats
-        cur.execute("""
-            SELECT
-                c.name,
-                c.rows * c.cols as capacity,
-                COUNT(a.id) as allocated
-            FROM classrooms c
-            LEFT JOIN allocations a ON c.id = a.classroom_id AND a.session_id = ?
-            WHERE c.id IN (SELECT DISTINCT classroom_id FROM allocations WHERE session_id = ?)
-            GROUP BY c.id
-        """, (session_id, session_id))
-        
-        room_stats = [dict(row) for row in cur.fetchall()]
-        
-        # Per-batch stats
-        cur.execute("""
-            SELECT batch_name, COUNT(*) as count
-            FROM allocations
-            WHERE session_id = ?
-            GROUP BY batch_name
-        """, (session_id,))
-        
-        batch_stats = [dict(row) for row in cur.fetchall()]
-        
-        # Completion rate
-        completion_rate = 0
-        total = session_data.get('total_students') or 0
-        allocated = session_data.get('allocated_count') or 0
-        if total > 0:
-            completion_rate = round((allocated / total) * 100, 2)
-        
-        return {
-            "session_id": session_id,
-            "plan_id": session_data.get('plan_id'),
-            "status": session_data.get('status'),
-            "total_students": total,
-            "allocated_count": allocated,
-            "pending_count": max(0, total - allocated),
-            "rooms": room_stats,
-            "batches": batch_stats,
-            "completion_rate": completion_rate
-        }
-        
-    except Exception as e:
-        print(f"❌ Error getting session stats: {e}")
-        return None
-    finally:
-        conn.close()
-
-
-def _get_allocated_rooms(cursor, session_id):
-    """Get list of allocated rooms for a session"""
-    cursor.execute("""
-        SELECT 
-            a.classroom_id,
-            c.name as classroom_name,
-            COUNT(a.id) as count
-        FROM allocations a
-        LEFT JOIN classrooms c ON a.classroom_id = c.id
-        WHERE a.session_id = ?
-        GROUP BY a.classroom_id, c.name
-        ORDER BY c.name
-    """, (session_id,))
-    
-    return [
-        {
-            'classroom_id': row[0],
-            'classroom_name': row[1] or 'Unknown',
-            'count': row[2] or 0
-        }
-        for row in cursor.fetchall()
-    ]
-
-
 # ============================================================================
 # CALLABLE FUNCTIONS (for imports from other modules)
 # ============================================================================
@@ -191,8 +98,8 @@ def createSession(user_id=None, plan_id=None, upload_ids=None):
         dict with success, session_id, plan_id, total_students, etc.
     """
     try:
-        conn = _get_conn()
-        cursor = conn.cursor()
+        from algo.database.queries.session_queries import SessionQueries
+        from algo.database.db import get_db
         
         if not user_id:
             return {'success': False, 'error': 'user_id is required'}
@@ -202,31 +109,23 @@ def createSession(user_id=None, plan_id=None, upload_ids=None):
         if not plan_id:
             plan_id = f"PLAN-{''.join(random.choices(string.ascii_uppercase + string.digits, k=8))}"
         
-        # Calculate total students from uploads
+        # Create session via query layer (single source of truth for INSERT)
+        session_id = SessionQueries.create_session(plan_id, user_id)
+        
+        # Link uploads and count students
+        db = get_db()
         total_students = 0
         if upload_ids:
+            for upload_id in upload_ids:
+                db.execute("UPDATE uploads SET session_id = ? WHERE id = ?", (session_id, upload_id))
+            
             placeholders = ','.join('?' * len(upload_ids))
-            cursor.execute(f"""
-                SELECT COUNT(*) FROM students 
-                WHERE upload_id IN ({placeholders})
-            """, upload_ids)
+            cursor = db.execute(f"SELECT COUNT(*) FROM students WHERE upload_id IN ({placeholders})", upload_ids)
             total_students = cursor.fetchone()[0] or 0
+            
+            SessionQueries.update_session_stats(session_id, total_students, 0)
         
-        # Create session
-        cursor.execute("""
-            INSERT INTO allocation_sessions 
-            (user_id, plan_id, total_students, allocated_count, status, created_at, last_activity)
-            VALUES (?, ?, ?, 0, 'active', ?, ?)
-        """, (user_id, plan_id, total_students, datetime.now().isoformat(), datetime.now().isoformat()))
-        
-        session_id = cursor.lastrowid
-        
-        # Link uploads to session
-        for upload_id in upload_ids:
-            cursor.execute("UPDATE uploads SET session_id = ? WHERE id = ?", (session_id, upload_id))
-        
-        conn.commit()
-        conn.close()
+        db.commit()
         
         print(f"✅ createSession: Created session {session_id} with {total_students} students")
         
@@ -249,10 +148,11 @@ def createSession(user_id=None, plan_id=None, upload_ids=None):
 def deleteSession(session_id, user_id=None, hard_delete=True):
     """
     Delete a session programmatically.
+    Delegates to SessionService.delete_session() — single source of truth for cascade logic.
     
     Args:
         session_id: ID of session to delete
-        user_id: Optional user ID for ownership check
+        user_id: Optional user ID for ownership check (not enforced here)
         hard_delete: If True, permanently delete. If False, just expire.
     
     Usage:
@@ -262,122 +162,24 @@ def deleteSession(session_id, user_id=None, hard_delete=True):
     Returns:
         dict with success and message
     """
-    try:
-        conn = _get_conn()
-        cursor = conn.cursor()
-        
-        # Check session exists
-        cursor.execute("SELECT user_id, status FROM allocation_sessions WHERE session_id = ?", (session_id,))
-        session = cursor.fetchone()
-        
-        if not session:
-            conn.close()
-            return {'success': False, 'error': 'Session not found'}
-        
-        if hard_delete:
-            # Delete in order (respect foreign keys)
-            
-            # 1. Delete allocations
-            cursor.execute("DELETE FROM allocations WHERE session_id = ?", (session_id,))
-            
-            # 2. Delete allocation history (if table exists)
-            try:
-                cursor.execute("DELETE FROM allocation_history WHERE session_id = ?", (session_id,))
-            except sqlite3.OperationalError:
-                pass  # Table might not exist
-            
-            # 3. Delete students via uploads
-            cursor.execute("""
-                DELETE FROM students WHERE upload_id IN (
-                    SELECT id FROM uploads WHERE session_id = ?
-                )
-            """, (session_id,))
-            
-            # 4. Delete uploads
-            cursor.execute("DELETE FROM uploads WHERE session_id = ?", (session_id,))
-            
-            # 5. Delete session
-            cursor.execute("DELETE FROM allocation_sessions WHERE session_id = ?", (session_id,))
-            
-            message = f'Session {session_id} permanently deleted'
-        else:
-            # Soft delete - just expire
-            cursor.execute("""
-                UPDATE allocation_sessions SET status = 'expired', last_activity = ?
-                WHERE session_id = ?
-            """, (datetime.now().isoformat(), session_id))
-            
-            message = f'Session {session_id} expired'
-        
-        conn.commit()
-        conn.close()
-        
-        print(f"🗑️ deleteSession: {message}")
-        
-        return {'success': True, 'message': message}
-        
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return {'success': False, 'error': str(e)}
+    result = SessionService.delete_session(session_id, hard_delete=hard_delete)
+    if result.get('success'):
+        print(f"🗑️ deleteSession: {result.get('message')}")
+    return result
 
 
 def getActiveSession(user_id=None):
     """
     Get active session programmatically.
+    Delegates to SessionService.get_active_session().
     
     Usage:
         from api.blueprints.sessions import getActiveSession
         session = getActiveSession(user_id=1)
     """
-    try:
-        conn = _get_conn()
-        cursor = conn.cursor()
-        
-        if not user_id:
-            return None
-        
-        # STRICT: Only get this user's active sessions
-        cursor.execute("""
-            SELECT session_id, plan_id, total_students, allocated_count,
-                   status, created_at, last_activity, user_id
-            FROM allocation_sessions 
-            WHERE status = 'active' AND user_id = ?
-            ORDER BY last_activity DESC 
-            LIMIT 1
-        """, (user_id,))
-        
-        row = cursor.fetchone()
-        
-        if not row:
-            conn.close()
-            return None
-        
-        session_id = row[0]
-        allocated_rooms = _get_allocated_rooms(cursor, session_id)
-        
-        conn.close()
-        
-        total = row[2] or 0
-        allocated = row[3] or 0
-        
-        return {
-            'session_id': row[0],
-            'plan_id': row[1],
-            'total_students': total,
-            'allocated_count': allocated,
-            'pending_count': max(0, total - allocated),
-            'status': row[4],
-            'created_at': row[5],
-            'last_activity': row[6],
-            'user_id': row[7],
-            'allocated_rooms': allocated_rooms
-        }
-        
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
+    if not user_id:
         return None
+    return SessionService.get_active_session(user_id)
 
 
 # ============================================================================
@@ -586,23 +388,8 @@ def get_session_pending(session_id):
         if not _verify_session_owner(session_id, user_id):
             return jsonify({"success": False, "error": "Access denied - you do not own this session"}), 403
         
-        conn = _get_conn()
-        conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
-        
-        cur.execute("""
-            SELECT DISTINCT s.id, s.enrollment, s.name, s.batch_name, s.batch_id, s.batch_color
-            FROM students s
-            JOIN uploads u ON s.upload_id = u.id
-            WHERE u.session_id = ?
-            AND s.id NOT IN (
-                SELECT student_id FROM allocations WHERE session_id = ?
-            )
-            ORDER BY s.batch_name, s.enrollment
-        """, (session_id, session_id))
-        
-        pending = [dict(row) for row in cur.fetchall()]
-        conn.close()
+        from algo.database.queries.student_queries import StudentQueries
+        pending = StudentQueries.get_pending_students(session_id)
         
         return jsonify({
             "success": True,

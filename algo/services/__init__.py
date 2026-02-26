@@ -24,9 +24,11 @@ Usage:
 from .session_service import SessionService
 from .student_service import StudentService
 from .allocation_service import AllocationService
+from . import auth_service
 
 __all__ = [
     'SessionService',
     'StudentService',
     'AllocationService',
+    'auth_service',
 ]

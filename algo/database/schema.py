@@ -54,18 +54,29 @@ def ensure_demo_db():
         """)
 
         # ====================================================================
-        # 2. USERS TABLE
+        # 2. USERS TABLE (UNIFIED - auth + domain in one table)
         # ====================================================================
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE,
-                email TEXT UNIQUE,
+                username TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
                 password_hash TEXT,
-                role TEXT DEFAULT 'STUDENT' CHECK(role IN ('STUDENT', 'ADMIN', 'TEACHER')),
+                role TEXT NOT NULL DEFAULT 'STUDENT' CHECK(role IN ('STUDENT', 'ADMIN', 'TEACHER', 'FACULTY')),
+                full_name TEXT,
+                auth_provider TEXT DEFAULT 'local',
+                google_id TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 last_login DATETIME
             );
+        """)
+
+        # Unique index for Google ID
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_google_id 
+            ON users(google_id) 
+            WHERE google_id IS NOT NULL;
         """)
 
         # ====================================================================
@@ -258,7 +269,7 @@ def ensure_demo_db():
         """)
 
         # ====================================================================
-        # 10. ENSURE COLUMNS EXIST (FOR MIGRATION FROM OLDER VERSIONS)
+        # 11. ENSURE COLUMNS EXIST (FOR MIGRATION FROM OLDER VERSIONS)
         # ====================================================================
         migration_queries = [
             ("ALTER TABLE uploads ADD COLUMN batch_color TEXT DEFAULT '#BFDBFE'", "uploads.batch_color"),
@@ -269,8 +280,12 @@ def ensure_demo_db():
             ("ALTER TABLE allocation_sessions ADD COLUMN last_activity DATETIME DEFAULT CURRENT_TIMESTAMP", "sessions.last_activity"),
             ("ALTER TABLE classrooms ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP", "classrooms.updated_at"),
             ("ALTER TABLE classrooms ADD COLUMN block_width INTEGER DEFAULT 2", "classrooms.block_width"),
-            ("ALTER TABLE classrooms ADD COLUMN block_structure TEXT DEFAULT NULL", "classrooms.block_structure")
-            
+            ("ALTER TABLE classrooms ADD COLUMN block_structure TEXT DEFAULT NULL", "classrooms.block_structure"),
+            # Auth-related columns (consolidated from user_auth.db)
+            ("ALTER TABLE users ADD COLUMN full_name TEXT", "users.full_name"),
+            ("ALTER TABLE users ADD COLUMN auth_provider TEXT DEFAULT 'local'", "users.auth_provider"),
+            ("ALTER TABLE users ADD COLUMN google_id TEXT", "users.google_id"),
+            ("ALTER TABLE users ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP", "users.updated_at"),
         ]
 
         for query, col_name in migration_queries:
