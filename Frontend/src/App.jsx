@@ -27,8 +27,7 @@ import AdminFeedbackPage from './pages/AdminFeedbackPage';
 import AboutusPage from './pages/AboutusPage';
 import TemplateEditor from './pages/TemplateEditor';
 import AttendancePage from './pages/AttendencePage';
-import MasterPlanPage from './pages/MasterPlanPage';
-import ExcelExportPage from './pages/ExcelExportPage';
+import MoreOptionsPage from './pages/MoreOptionsPage';
 import ClassroomPage from './pages/ClassroomPage';
 import { DatabaseManager } from './components/database';
 import ManualAllocation from './pages/ManualAllocation';
@@ -158,8 +157,7 @@ const AppRoutes = () => {
           <Route path="/admin-feedback" element={<ProtectedRoute><AdminFeedbackPage showToast={showToast} /></ProtectedRoute>} />
           <Route path="/template-editor" element={<ProtectedRoute><TemplateEditor showToast={showToast} /></ProtectedRoute>} />
           <Route path="/attendance/:planId" element={<ProtectedRoute><AttendancePage showToast={showToast} /></ProtectedRoute>} />
-          <Route path="/master-plan/:planId" element={<ProtectedRoute><MasterPlanPage showToast={showToast} /></ProtectedRoute>} />
-          <Route path="/excel-export/:planId" element={<ProtectedRoute><ExcelExportPage showToast={showToast} /></ProtectedRoute>} />
+          <Route path="/more-options/:planId" element={<ProtectedRoute><MoreOptionsPage showToast={showToast} /></ProtectedRoute>} />
           <Route path="/database" element={<ProtectedRoute><DatabaseManager showToast={showToast} /></ProtectedRoute>} />
 
           {/* Fallback */}

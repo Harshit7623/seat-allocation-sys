@@ -1,4 +1,5 @@
 # pdf_gen/pdf_generation.py (UPDATED VERSION )
+import io
 import json
 import os
 import hashlib
@@ -533,5 +534,56 @@ def create_seating_pdf(filename="algo/pdf_gen/seat_plan_generated/seating_plan.p
     doc.build(story, onFirstPage=header_and_footer, onLaterPages=header_and_footer)
     print(f"✅ PDF generated: {filename}")
     return filename
+
+
+def generate_seating_pdf_to_buffer(
+    data: dict,
+    user_id: str = 'system',
+    template_name: str = 'default',
+    room_no: str = None
+) -> io.BytesIO:
+    """
+    Generate a seating-plan PDF entirely in memory and return a BytesIO buffer.
+
+    Bypasses the L2 disk cache completely — every call produces a fresh PDF
+    that is streamed directly to the caller without touching the filesystem.
+
+    Args:
+        data:          Seating payload (same shape accepted by create_seating_pdf).
+        user_id:       Used to select the user's template configuration.
+        template_name: Template name to pass to template_manager.
+        room_no:       Optional room label; auto-extracted from data when omitted.
+
+    Returns:
+        BytesIO buffer positioned at byte 0, ready for send_file / read.
+    """
+    if data is None:
+        raise ValueError("Seating data is required")
+
+    # Extract room_no from payload when not explicitly supplied
+    if room_no is None:
+        if 'metadata' in data and 'room_no' in data['metadata']:
+            room_no = data['metadata']['room_no']
+        elif 'seating' in data:
+            for _row in data['seating']:
+                for _seat in _row:
+                    if _seat and not _seat.get('is_broken') and not _seat.get('is_unallocated'):
+                        room_no = _seat.get('room_no')
+                        if room_no:
+                            break
+                if room_no:
+                    break
+
+    buffer = io.BytesIO()
+    # ReportLab's SimpleDocTemplate accepts any file-like object as first argument
+    create_seating_pdf(
+        filename=buffer,
+        data=data,
+        user_id=user_id,
+        template_name=template_name,
+        room_no=room_no
+    )
+    buffer.seek(0)
+    return buffer
     
     

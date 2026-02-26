@@ -6,7 +6,7 @@ import SplitText from '../components/SplitText';
 import { 
   Upload, Layout, Monitor, Clock, ArrowRight, Loader2, AlertCircle, 
   CheckCircle2, Users, Download, Eye, RefreshCw, X, FileText, 
-  BarChart3, Wrench, Building2, FileSpreadsheet
+  BarChart3, Wrench, Building2, FileSpreadsheet, MoreHorizontal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -859,18 +859,11 @@ const CreatePlan = ({ showToast }) => {
                   {/* Close button */}
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-3">
                   <button
-                    onClick={() => navigate(`/master-plan/${planDetails.plan_id}`)}
-                    className="w-full px-6 py-3 bg-purple-500 hover:bg-purple-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-purple-500/25"
+                    onClick={() => navigate(`/more-options/${planDetails.plan_id}`)}
+                    className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-orange-500/25"
                   >
-                    <BarChart3 size={18} />
-                    Generate Master Plan
-                  </button>
-                  <button
-                    onClick={() => navigate(`/excel-export/${planDetails.plan_id}`)}
-                    className="w-full px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-emerald-500/25"
-                  >
-                    <FileSpreadsheet size={18} />
-                    Export to Excel
+                    <MoreHorizontal size={18} />
+                    More Options
                   </button>
                   <button
                     onClick={closePlanViewer}
