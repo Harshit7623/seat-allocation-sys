@@ -6,7 +6,7 @@ import SplitText from '../components/SplitText';
 import { 
   Upload, Layout, Monitor, Clock, ArrowRight, Loader2, AlertCircle, 
   CheckCircle2, Users, Download, Eye, RefreshCw, X, FileText, 
-  BarChart3, Wrench, Building2
+  BarChart3, Wrench, Building2, FileSpreadsheet, MoreHorizontal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -857,7 +857,14 @@ const CreatePlan = ({ showToast }) => {
                   )}
 
                   {/* Close button */}
-                <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-3">
+                  <button
+                    onClick={() => navigate(`/more-options/${planDetails.plan_id}`)}
+                    className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-orange-500/25"
+                  >
+                    <MoreHorizontal size={18} />
+                    More Options
+                  </button>
                   <button
                     onClick={closePlanViewer}
                     className="w-full px-6 py-3 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"

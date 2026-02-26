@@ -224,6 +224,28 @@ import CodeHeader from '@site/src/components/filetypeheaderstyle';
 
 ---
 
+## What's New in v2.4 - Master Plan Feature
+
+<MagicBento enableStars={true} glowColor="239, 68, 68" enableBorderGlow={true} enableTilt={true}>
+  <div style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
+    <div style={{ fontSize: '3rem' }}>🏛️</div>
+    <div style={{ flex: 1 }}>
+      <h3 style={{ color: '#ef4444', marginTop: 0 }}>Master Plan Generation</h3>
+      <p style={{ margin: '0.5rem 0 0 0', lineHeight: '1.6' }}>
+        Create <b>institutional-wide seating plans</b> that coordinate multiple rooms, branches, and exam sessions. Perfect for university-wide exams with automatic form pre-population, template configuration, and comprehensive PDF exports.
+      </p>
+      <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+        <span style={{ backgroundColor: '#fee2e2', color: '#991b1b', padding: '0.25rem 0.75rem', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 500 }}>Multi-Room</span>
+        <span style={{ backgroundColor: '#fee2e2', color: '#991b1b', padding: '0.25rem 0.75rem', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 500 }}>Branch Detection</span>
+        <span style={{ backgroundColor: '#fee2e2', color: '#991b1b', padding: '0.25rem 0.75rem', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 500 }}>Template Presets</span>
+        <span style={{ backgroundColor: '#fee2e2', color: '#991b1b', padding: '0.25rem 0.75rem', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 500 }}>Institutional Branding</span>
+      </div>
+    </div>
+  </div>
+</MagicBento>
+
+---
+
 ## System Architecture
 
 The system follows a three-layer architecture:

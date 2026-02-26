@@ -12,12 +12,14 @@ import ComplexityCards from '@site/src/components/complexitycards';
 
 Fast developer integration and comprehensive REST API workflows.
 
+**Version: v2.4 | Updated: February 2026**
+
 ## 5-Minute Setup
 
 ### Backend Setup
 <CodeHeader title="BASH">
 {`cd algo
-pip install Flask Flask-CORS
+pip install -r requirements.txt
 python app.py
 # Running on http://localhost:5000`}
 </CodeHeader>
@@ -550,5 +552,200 @@ data.constraints_status.constraints.forEach(c => {
 
 ---
 
-**Version**: 2.4  
-**Last Updated**: February 9, 2026
+## New in v2.4
+
+### Master Plan PDF Endpoint
+
+<CodeHeader title="POST /api/generate-master-plan">
+{`// Request (Full Form with All Options)
+{
+  "plan_id": "PLAN-ABC123",
+  "dept_name": "Department of Computer Science & Engineering",
+  "exam_name": "Minor-II Examination, November 2025",
+  "date_text": "15th February 2026",
+  "title": "Master Seating Plan",
+  "left_sign_name": "Coordinator Name",
+  "left_sign_title": "Course Coordinator",
+  "right_sign_name": "HOD Name",
+  "right_sign_title": "Head of Department"
+}
+
+// Response: Binary PDF (Content-Type: application/pdf)
+// Features:
+// - A4 format with institutional branding
+// - Multi-room aggregation
+// - Auto-detected branch metadata
+// - Roll number ranges per room
+// - Grand totals with branch segregation
+// - In-memory rendering (no disk cache)
+// - Signature fields for authorization`}
+</CodeHeader>
+
+**Endpoint Details:**
+- **Path**: `POST /api/generate-master-plan`
+- **Auth**: Required (JWT token)
+- **Response Type**: Binary PDF
+- **Cache Status**: In-memory only (no L2 caching)
+- **Latency**: 1000-2000ms for 20 rooms
+
+**Master Plan Content:**
+- Table with columns: Branch | Semester | Room No | From Roll | To Roll | Total | Grand Total
+- Signature section with date and officer details
+- Department header with exam name
+- Footer with generation metadata
+
+### GET /api/plan-batches/{plan_id}
+
+<CodeHeader title="Endpoint Details">
+{`// Retrieve plan metadata and room-wise batch information
+GET /api/plan-batches/PLAN-ABC123
+
+// Response
+{
+  "metadata": {
+    "plan_id": "PLAN-ABC123",
+    "total_students": 240,
+    "room_count": 3,
+    "batch_count": 4,
+    "status": "FINALIZED",
+    "active_rooms": ["M101", "M102", "M103"],
+    "created_at": "2026-02-23T10:00:00Z"
+  },
+  "rooms": {
+    "M101": {
+      "batches": {
+        "Batch A": {
+          "info": {
+            "branch": "CS",
+            "degree": "B.Tech",
+            "joining_year": "2024"
+          },
+          "students": [
+            {
+              "roll_number": "BTCS24O1001",
+              "name": "Student Name",
+              "position": "A1",
+              "paper_set": "A"
+            }
+          ],
+          "count": 75
+        }
+      }
+    }
+  }
+}`}
+</CodeHeader>
+
+### GET /api/template/config
+
+<CodeHeader title="Load Template Configuration">
+{`// Retrieve template configuration for pre-filling master plan form
+GET /api/template/config
+
+// Response
+{
+  "success": true,
+  "template": {
+    "dept_name": "Department of Computer Science & Engineering",
+    "exam_details": "Minor-II Examination",
+    "coordinator_name": "Dr. John Doe",
+    "coordinator_title": "Course Coordinator",
+    "hod_name": "Prof. Jane Smith",
+    "hod_title": "Head of Department"
+  }
+}`}
+</CodeHeader>
+
+## 🆕 New in v2.4
+
+### Variable Block Structures
+
+<CodeHeader title="JSON - New Parameter">
+{`{
+  "block_width": 3,          // Legacy: uniform width
+  "block_structure": [3, 2, 3] // 🆕 Variable widths (takes precedence)
+}
+
+// Result: 8 columns grouped as [3], [2], [3]
+// Use case: Irregular classroom layouts`}
+</CodeHeader>
+
+### Adjacent Seating Control
+
+<CodeHeader title="JSON - New Parameter">
+{`{
+  "num_batches": 1,
+  "allow_adjacent_same_batch": true  // 🆕 Enable horizontal adjacency
+}
+
+// When true:
+// - Gap columns NOT inserted
+// - Same-batch students sit horizontally adjacent
+// - P1-P3 paper set constraints still enforced
+// - Only for single-batch scenarios`}
+</CodeHeader>
+
+### Branch Detection
+
+<CodeHeader title="AUTOMATIC METADATA">
+{`// Input enrollments:
+"BTCS24O1001"  → Branch: CS
+"0901CD231067" → Branch: CD (new format)
+
+// Output in cache:
+{
+  "batches": {
+    "Batch A": {
+      "info": {
+        "degree": "B.Tech",
+        "branch": "CS",     // 🆕 Auto-detected
+        "joining_year": "2024"
+      }
+    }
+  }
+}
+
+// Used by:
+// - Attendance sheet generation
+// - Master plan PDF labeling
+// - Analytics & reporting`}
+</CodeHeader>
+
+### Feedback System
+
+<CodeHeader title="POST /api/feedback">
+{`// Request
+{
+  "plan_id": "PLAN-ABC123",
+  "feedback_type": "constraint_violation|seating_conflict|other",
+  "message": "Students found adjacent with same batch",
+  "severity": "high|medium|low"
+}
+
+// Response
+{
+  "success": true,
+  "feedback_id": "FB-12345",
+  "timestamp": "2026-02-23T14:30:00Z"
+}`}
+</CodeHeader>
+
+### Template Management
+
+<CodeHeader title="GET /api/templates">
+{`// Response
+{
+  "templates": [
+    {
+      "name": "default",
+      "description": "Standard seating plan",
+      "format": "landscape"
+    },
+    {
+      "name": "compact",
+      "description": "Condensed layout",
+      "format": "portrait"
+    }
+  ]
+}`}
+</CodeHeader>

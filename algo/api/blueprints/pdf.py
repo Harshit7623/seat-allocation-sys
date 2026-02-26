@@ -343,32 +343,28 @@ def generate_pdf():
         # ============================================================================
         # LAYER 2: PDF Generation - Let pdf_generation.py handle caching
         # ============================================================================
-        logger.info(f"📋 [L1→L2] Passing to PDF generation: seating_source={seating_source}, user={user_id}, template={template_name}")
-        
+        logger.info(f"📋 [L1→Memory] Generating in-memory PDF: seating_source={seating_source}, user={user_id}, template={template_name}")
+
         try:
-            from algo.pdf_gen.pdf_generation import get_or_create_seating_pdf
-            
-            pdf_path = get_or_create_seating_pdf(
-                seating_payload,
+            from algo.pdf_gen.pdf_generation import generate_seating_pdf_to_buffer
+
+            pdf_buffer = generate_seating_pdf_to_buffer(
+                data=seating_payload,
                 user_id=user_id,
                 template_name=template_name
             )
         except Exception as pdf_err:
             logger.error(f"❌ PDF generation failed: {str(pdf_err)}")
             return jsonify({"error": f"PDF generation failed: {str(pdf_err)}"}), 500
-        
-        # Verify PDF exists
-        if not os.path.exists(pdf_path):
-            return jsonify({"error": "PDF file not created"}), 500
-        
-        # Generate filename
+
+        # Generate download filename
         meta_room = seating_payload.get('metadata', {}).get('room_no') or room_no or "Unknown"
         room_suffix = f"_{meta_room.replace(' ', '_')}" if meta_room else ""
-        
-        logger.info(f"✅ PDF ready: {pdf_path} (seating_source={seating_source})")
-        
+
+        logger.info(f"✅ PDF ready (in-memory, seating_source={seating_source})")
+
         return send_file(
-            pdf_path,
+            pdf_buffer,
             as_attachment=True,
             download_name=f"seating_plan{room_suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
             mimetype='application/pdf'
@@ -497,40 +493,52 @@ def generate_pdf_batch():
         if not room_names:
             return jsonify({"error": "No rooms available"}), 400
         
-        from algo.pdf_gen.pdf_generation import get_or_create_seating_pdf
-        
-        generated_files = []
+        import zipfile
+        import io as _io
+        from algo.pdf_gen.pdf_generation import generate_seating_pdf_to_buffer
+
+        generated_rooms = []
         errors = []
-        
-        for room_name in room_names:
-            # Use hybrid mechanism for each room in batch
-            room_request = {**data, 'room_name': room_name}
-            room_payload, room_source = get_seating_data_hybrid(room_request)
-            
-            if not room_payload:
-                errors.append(f"Room '{room_name}' could not be retrieved")
-                continue
-            
-            try:
-                pdf_path = get_or_create_seating_pdf(
-                    room_payload,
-                    user_id=data.get('user_id', 'batch'),
-                    template_name=data.get('template_name', 'default')
-                )
-                generated_files.append({
-                    'room': room_name,
-                    'path': pdf_path,
-                    'filename': os.path.basename(pdf_path)
-                })
-            except Exception as e:
-                errors.append(f"Room '{room_name}': {str(e)}")
-        
-        return jsonify({
-            "success": True,
-            "generated": len(generated_files),
-            "files": generated_files,
-            "errors": errors
-        })
+        zip_buffer = _io.BytesIO()
+
+        with zipfile.ZipFile(zip_buffer, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+            for room_name in room_names:
+                # Use hybrid mechanism for each room in batch
+                room_request = {**data, 'room_name': room_name}
+                room_payload, room_source = get_seating_data_hybrid(room_request)
+
+                if not room_payload:
+                    errors.append(f"Room '{room_name}' could not be retrieved")
+                    logger.warning(f"⚠️ [Batch PDF] Room '{room_name}' not found in cache or DB")
+                    continue
+
+                try:
+                    logger.info(f"📝 [Batch PDF] Generating in-memory PDF for room '{room_name}' (source={room_source})")
+                    pdf_buf = generate_seating_pdf_to_buffer(
+                        data=room_payload,
+                        user_id=str(data.get('user_id', request.user_id)),
+                        template_name=data.get('template_name', 'default')
+                    )
+                    safe_name = room_name.replace(' ', '_').replace('/', '-')
+                    zf.writestr(f"seating_plan_{safe_name}.pdf", pdf_buf.read())
+                    generated_rooms.append(room_name)
+                    logger.info(f"✅ [Batch PDF] Room '{room_name}' added to zip")
+                except Exception as e:
+                    errors.append(f"Room '{room_name}': {str(e)}")
+                    logger.error(f"❌ [Batch PDF] Room '{room_name}' failed: {e}")
+
+        if not generated_rooms:
+            return jsonify({"error": "No PDFs could be generated", "errors": errors}), 500
+
+        zip_buffer.seek(0)
+        logger.info(f"✅ [Batch PDF] Zip ready — {len(generated_rooms)} room(s), {len(errors)} error(s)")
+
+        return send_file(
+            zip_buffer,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f"seating_plans_{plan_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        )
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -885,22 +893,25 @@ def generate_test_pdf():
             }
         }
         
-        from algo.pdf_gen.pdf_generation import get_or_create_seating_pdf
-        pdf_path = get_or_create_seating_pdf(
-            seating_payload,
+        from algo.pdf_gen.pdf_generation import generate_seating_pdf_to_buffer
+        logger.info(f"🧪 [Test PDF] Generating in-memory test PDF for user={user_id}, template='{template_name}'")
+
+        pdf_buffer = generate_seating_pdf_to_buffer(
+            data=seating_payload,
             user_id=str(user_id),
             template_name=template_name
         )
-        
+        logger.info(f"✅ [Test PDF] In-memory PDF ready — streaming to client")
+
         return send_file(
-            pdf_path,
+            pdf_buffer,
             mimetype='application/pdf',
             as_attachment=True,
             download_name=f'test_seating_plan_{datetime.now().strftime("%H%M%S")}.pdf'
         )
-        
+
     except Exception as e:
-        logger.error(f"❌ Error generating test PDF: {e}")
+        logger.error(f"❌ [Test PDF] Generation failed: {e}")
         return jsonify({"success": False, "error": f'Failed to generate test PDF: {str(e)}'}), 500
 
 @pdf_bp.route('/template/banner/<path:filename>', methods=['GET'])

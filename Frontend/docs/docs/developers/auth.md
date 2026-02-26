@@ -8,7 +8,52 @@ import ComplexityCards from '@site/src/components/complexitycards';
 
 # 🔐 Authentication & Security
 
-<ComplexityCards />
+export const authCards = [
+  {
+    title: "Authentication Flow",
+    theme: "indigo",
+    tableData: {
+      headers: ["Step", "Component", "Action"],
+      rows: [
+        ["1. Sign Up", "Frontend", "Form submission to backend"],
+        ["2. Hash Password", "Backend (Bcrypt)", "Secure password hashing"],
+        ["3. Store User", "SQLite Database", "Save credentials"],
+        ["4. JWT Token", "Auth Service", "Generate session token"],
+        ["5. Token Store", "Frontend", "Store in localStorage"]
+      ]
+    }
+  },
+  {
+    title: "Security Features",
+    theme: "emerald",
+    tableData: {
+      headers: ["Feature", "Technology", "Purpose"],
+      rows: [
+        ["Password Hashing", "Bcrypt (10 rounds)", "Secure credential storage"],
+        ["Token Auth", "JWT (HS256)", "Stateless session management"],
+        ["CORS", "Flask-CORS", "Cross-origin protection"],
+        ["Token Expiry", "30 min default", "Session timeout security"],
+        ["Google OAuth", "OAuth 2.0 flow", "Third-party authentication"]
+      ]
+    }
+  },
+  {
+    title: "Endpoints Security",
+    theme: "amber",
+    tableData: {
+      headers: ["Endpoint", "Authentication", "Role Required"],
+      rows: [
+        ["POST /api/auth/signup", "None", "Public"],
+        ["POST /api/auth/login", "None", "Public"],
+        ["GET /api/auth/profile", "JWT Token", "User"],
+        ["POST /api/auth/logout", "JWT Token", "User"],
+        ["POST /api/master-plan", "JWT Token", "Faculty/Admin"]
+      ]
+    }
+  }
+];
+
+<ComplexityCards cards={authCards} />
 
 Comprehensive technical documentation for user authentication, Google OAuth integration, and security protocols.
 
@@ -16,7 +61,7 @@ Comprehensive technical documentation for user authentication, Google OAuth inte
 
 ## 📋 System Overview
 
-The authentication system is built on a secure, modular architecture combining SQLite persistence with JWT-based session management. <span style={{ backgroundColor: '#f97316', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', verticalAlign: 'middle', marginLeft: '8px' }}>v2.3 UPDATE</span>
+The authentication system is built on a secure, modular architecture combining SQLite persistence with JWT-based session management.
 
 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem', marginBottom: '3rem' }}>
   <div style={{ padding: '1.5rem', borderRadius: '0.75rem', border: '1px solid #334155', backgroundColor: '#1e293b' }}>
@@ -358,5 +403,4 @@ CORS(app, resources={
 
 ---
 
-**Version**: 2.3  
-**Last Updated**: January 24, 2026
+**v2.4 | Updated: February 2026**

@@ -10,6 +10,8 @@ import ComplexityCards from '@site/src/components/complexitycards';
 
 Deep dive into the structural design, data flow, and algorithmic foundations of the platform.
 
+**Version: v2.4 | Updated: February 2026**
+
 ## High-Level Architecture
 
 ```mermaid
@@ -20,6 +22,7 @@ graph TB
     classDef algo fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c,rx:5,ry:5
     classDef router fill:#fff3e0,stroke:#ff6d00,stroke-width:2px,color:#e65100,stroke-dasharray: 5 5,shape:circle
     classDef labelNode fill:#ffffff,stroke:#333333,stroke-width:1px,rx:5,ry:5,color:#000
+    classDef new fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#f57f17,rx:5,ry:5
     
     linkStyle default stroke:#ff9800,stroke-width:3px,fill:none
 
@@ -28,6 +31,7 @@ graph TB
         HTML["React Forms"]:::client
         GRID["Glassy Seating Grid"]:::client
         DASH["Admin Dashboard"]:::client
+        FB["Feedback System"]:::new
     end
        
     %% API LAYER
@@ -36,18 +40,26 @@ graph TB
         BP_S["Session Blueprint"]:::api
         BP_A["Allocation Blueprint"]:::api
         BP_U["Auth Blueprint"]:::api
+        BP_MP["Master Plan PDF"]:::new
+        BP_FB["Feedback Blueprint"]:::new
         
         ROUTER --> BP_S
         ROUTER --> BP_A
         ROUTER --> BP_U
+        ROUTER --> BP_MP
+        ROUTER --> BP_FB
     end
     
     %% CORE LAYER
     subgraph CoreLayer["Core Logic (algo/core)"]
         S_SERVICE["Session Service"]:::algo
         A_SERVICE["Allocation Service"]:::algo
-        ENGINE["Seating Engine (seating.py)"]:::algo
+        ENGINE["Seating Engine (v2.4)"]:::new
         VALIDATOR["Pragmatic Validator"]:::algo
+        BD["Branch Detection"]:::new
+        
+        ENGINE -.->|Uses| BD
+    end
         
         BP_S --> S_SERVICE
         BP_A --> A_SERVICE
@@ -422,8 +434,3 @@ The platform employs a **Glassmorphism** design language to create a premium, mo
 - **Navbar:** High-gloss pill-shaped navigation with transparent borders.
 - **Cards:** `.glass-card` utility classes applied to seating grid and summary items.
 - **Modals:** Deep blur overlays for focused constraint management.
-
----
-
-**Version**: 2.4  
-**Last Updated**: February 9, 2026

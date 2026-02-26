@@ -27,6 +27,8 @@ from algo.api.blueprints.health import health_bp
 from algo.api.blueprints.feedback import feedback_bp
 from algo.api.blueprints.database import database_bp
 from algo.api.blueprints.templates import templates_bp
+from algo.api.blueprints.master_plan_pdf import master_plan_bp
+from algo.api.blueprints.excel_export import excel_export_bp
 
 
 def create_app(test_config=None):
@@ -125,6 +127,8 @@ def create_app(test_config=None):
     app.register_blueprint(admin_bp)
     app.register_blueprint(feedback_bp)
     app.register_blueprint(templates_bp)
+    app.register_blueprint(master_plan_bp)
+    app.register_blueprint(excel_export_bp)
     
     from algo.api.blueprints.plans import plans_bp
     app.register_blueprint(plans_bp)

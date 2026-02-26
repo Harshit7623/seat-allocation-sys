@@ -17,7 +17,8 @@ import {
   Calendar,
   Clock,
   Activity,
-  FileText
+  FileText,
+  MoreHorizontal
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getToken } from '../utils/tokenStorage';

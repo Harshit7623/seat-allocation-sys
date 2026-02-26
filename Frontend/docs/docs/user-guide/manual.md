@@ -147,7 +147,96 @@ Welcome to the **Seat Allocation System**. Transform your examination management
 
 ---
 
-## 📄 Reporting & Outputs
+## � Master Plan Management (v2.4 New)
+*Generate comprehensive institutional seating plans with multi-room support.*
+
+<MagicBento glowColor="139, 92, 246" enableStars={true}>
+  <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'center' }}>
+    <div style={{ flex: 1, minWidth: '300px' }}>
+      <h3 style={{ color: '#8b5cf6' }}>🏛️ Institutional Planning</h3>
+      <p>Create master plans that combine multiple rooms, branches, and exam sessions into a single coordinated schedule. Perfect for university-wide exams or large-scale institutional planning.</p>
+    </div>
+    <div style={{ borderLeft: '2px solid rgba(139, 92, 246, 0.3)', paddingLeft: '2rem' }}>
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+        <li>✅ Multi-Room Coordination</li>
+        <li>✅ Branch-wise Allocation</li>
+        <li>✅ Invigilator Assignments</li>
+        <li>✅ Institutional Branding</li>
+      </ul>
+    </div>
+  </div>
+</MagicBento>
+
+### Master Plan Workflow
+
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginTop: '1.5rem' }}>
+  <MagicBento glowColor="59, 130, 246" enableStars={false}>
+    <h4 style={{ borderBottom: '1px solid rgba(59, 130, 246, 0.2)', paddingBottom: '0.5rem' }}>1️⃣ Create Plan</h4>
+    <ul style={{ fontSize: '0.9rem', paddingLeft: '1.2rem' }}>
+      <li>Click <b>"New Master Plan"</b></li>
+      <li>Enter plan name (e.g., "Mid-Sem 2026")</li>
+      <li>Select exam date</li>
+      <li>Add invigilators</li>
+    </ul>
+  </MagicBento>
+
+  <MagicBento glowColor="16, 185, 129" enableStars={false}>
+    <h4 style={{ borderBottom: '1px solid rgba(16, 185, 129, 0.2)', paddingBottom: '0.5rem' }}>2️⃣ Load Template</h4>
+    <ul style={{ fontSize: '0.9rem', paddingLeft: '1.2rem' }}>
+      <li>Click <b>"Load Template Config"</b></li>
+      <li>System pre-fills form fields</li>
+      <li>Institution details auto-populate</li>
+      <li>Review and customize</li>
+    </ul>
+  </MagicBento>
+
+  <MagicBento glowColor="245, 158, 11" enableStars={false}>
+    <h4 style={{ borderBottom: '1px solid rgba(245, 158, 11, 0.2)', paddingBottom: '0.5rem' }}>3️⃣ Select Rooms</h4>
+    <ul style={{ fontSize: '0.9rem', paddingLeft: '1.2rem' }}>
+      <li>Choose rooms for allocation</li>
+      <li>Assign batch distribution</li>
+      <li>Set branch preferences</li>
+      <li>Configure layout options</li>
+    </ul>
+  </MagicBento>
+
+  <MagicBento glowColor="236, 72, 153" enableStars={false}>
+    <h4 style={{ borderBottom: '1px solid rgba(236, 72, 153, 0.2)', paddingBottom: '0.5rem' }}>4️⃣ Generate & Export</h4>
+    <ul style={{ fontSize: '0.9rem', paddingLeft: '1.2rem' }}>
+      <li>Click <b>"Generate Master Plan"</b></li>
+      <li>Download comprehensive PDF</li>
+      <li>Email to stakeholders</li>
+      <li>Generate shareable link</li>
+    </ul>
+  </MagicBento>
+</div>
+
+### Export Options
+
+| Export Type | Format | Content |
+| :--- | :--- | :--- |
+| **Master Plan PDF** | PDF | Complete plan with all rooms, seating, and invigilator assignments |
+| **Branch Reports** | PDF | Separate reports per branch/stream |
+| **Room Schedules** | CSV / PDF | Room-wise timing and invigilator allocation |
+| **Attendance Files** | PDF / Excel | Pre-formatted signature sheets per room |
+
+<MagicBento glowColor="16, 185, 129" enableStars={true} style={{ marginTop: '2rem' }}>
+  <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', padding: '0.5rem' }}>
+    <div style={{ fontSize: '2.5rem', opacity: 0.9 }}>💡</div>
+    <div>
+      <h4 style={{ color: '#10b981', margin: '0 0 0.25rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        Pro-Tip: Multi-Room Coordination
+      </h4>
+      <p style={{ margin: 0, fontSize: '0.95rem', opacity: 0.8, lineHeight: '1.5' }}>
+        Master Plans automatically balance batch distribution across rooms. Use the <b>"Auto-Balance"</b> feature to ensure even seating load and optimal invigilator deployment.
+      </p>
+    </div>
+  </div>
+</MagicBento>
+
+---
+
+## �📄 Reporting & Outputs
 *Professional documentation is just one click away.*
 
 | Report Type | Format | Content |
@@ -188,3 +277,7 @@ Welcome to the **Seat Allocation System**. Transform your examination management
     </MagicBento>
   </a>
 </div>
+
+---
+
+**v2.4 | Updated: February 2026**
