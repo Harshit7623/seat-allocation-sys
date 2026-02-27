@@ -110,8 +110,9 @@ def _extract_master_plan_data(snapshot: dict) -> list:
             if not rolls:
                 continue
 
-            # Sort naturally by numeric suffix
-            rolls.sort(key=_extract_numeric_suffix)
+            # Sort lexicographically — correct for both old (0901CD...) and new (BTCS...)
+            # formats; numeric-only suffix sort mis-orders rolls across different year prefixes
+            rolls.sort()
 
             # Detect inter-branch mixing within this batch
             prefixes = set(_extract_roll_prefix(r) for r in rolls)

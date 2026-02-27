@@ -136,19 +136,30 @@ def process_seating_data(json_data):
     
     # Process roll number ranges - sort and extract first/last
     import re
-    
-    def extract_numeric_suffix(roll_no):
-        """Extract trailing digits from roll number for natural sorting"""
-        match = re.search(r'(\d+)$', str(roll_no))
-        return int(match.group(1)) if match else 0
-    
+
+    def extract_branch_prefix(roll_no):
+        """Extract branch prefix for mixed-batch detection (handles both roll formats).
+        New format: BTCS24O1138 → BTCS | Old format: 0901CD231014 → CD"""
+        roll = str(roll_no).strip().upper()
+        m = re.match(r'^([A-Z]+)', roll)
+        if m:
+            return m.group(1)
+        m = re.match(r'^\d+([A-Z]+)', roll)
+        if m:
+            return m.group(1)
+        return roll[:4]
+
     for label, range_info in summary['batch_roll_ranges'].items():
         rolls = range_info['rolls']
         if rolls:
-            # Sort roll numbers naturally by numeric suffix
-            sorted_rolls = sorted(rolls, key=extract_numeric_suffix)
+            # Sort lexicographically — works correctly for both old (0901CD...) and
+            # new (BTCS...) formats; numeric-only suffix sort fails across year prefixes
+            sorted_rolls = sorted(rolls)
             range_info['first'] = sorted_rolls[0]
             range_info['last'] = sorted_rolls[-1]
+            # If multiple branch prefixes exist → lateral/interbranch mix → show 'onwards'
+            prefixes = set(extract_branch_prefix(r) for r in sorted_rolls)
+            range_info['is_onwards'] = len(prefixes) > 1
     
     # Extract branch information with year from batches data
     batches_data = json_data.get('batches', {})
@@ -263,11 +274,14 @@ def create_seating_pdf(filename="algo/pdf_gen/seat_plan_generated/seating_plan.p
         batch_line_items = []
         for label, count in summary_stats['batch_counts'].items():
             roll_range_info = summary_stats.get('batch_roll_ranges', {}).get(label)
-            if roll_range_info and roll_range_info.get('first') and roll_range_info.get('last'):
+            if roll_range_info and roll_range_info.get('first'):
                 first_roll = roll_range_info['first']
-                last_roll = roll_range_info['last']
-                # Show range with count
-                batch_line_items.append(f"{first_roll}-{last_roll} ({count})")
+                if roll_range_info.get('is_onwards'):
+                    # Mixed branch / lateral entry — show open-ended range
+                    batch_line_items.append(f"{first_roll} - onwards ({count})")
+                else:
+                    last_roll = roll_range_info.get('last', '')
+                    batch_line_items.append(f"{first_roll} - {last_roll} ({count})")
             else:
                 # Fallback to label: count format
                 batch_line_items.append(f"{label}: {count}")
