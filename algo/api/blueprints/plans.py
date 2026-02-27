@@ -2,7 +2,7 @@
 # Allows users to retrieve and review recent seating plans and their associated batch/room counts.
 from flask import Blueprint, jsonify, request
 from algo.database.db import get_db_connection
-from algo.auth_service import token_required
+from algo.services.auth_service import token_required
 import sqlite3
 import logging
 

@@ -25,8 +25,7 @@ load_dotenv()
 # CONFIGURATION & INITIALIZATION
 # ============================================================================
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, 'user_auth.db')
+from algo.config.settings import Config
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-stable-secret-key-change-in-prod")
 JWT_ALGORITHM = "HS256"
@@ -36,6 +35,12 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 # Production safety check
 if os.getenv('FLASK_ENV') == 'production' and JWT_SECRET_KEY == "dev-stable-secret-key-change-in-prod":
     print("⚠️  CRITICAL: Using default JWT_SECRET_KEY in production! Set JWT_SECRET_KEY env variable.")
+
+def _get_conn():
+    """Get a standalone connection to the consolidated database."""
+    conn = sqlite3.connect(str(Config.DB_PATH), timeout=20)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 # ============================================================================
 # ADMIN EMAIL LIST (Add admin emails here)
@@ -90,71 +95,7 @@ def admin_required(f):
     
     return decorated
 
-def init_user_database():
-    """Initializes the SQLite database and creates the users table."""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        # Create main users table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                password_hash TEXT,
-                role TEXT NOT NULL DEFAULT 'STUDENT',
-                full_name TEXT,
-                auth_provider TEXT DEFAULT 'local',
-                google_id TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # ========== SAFE DATABASE MIGRATIONS ==========
-        try:
-            cursor.execute("SELECT full_name FROM users LIMIT 1")
-        except sqlite3.OperationalError:
-            print("⚠️  Adding 'full_name' column...")
-            cursor.execute("ALTER TABLE users ADD COLUMN full_name TEXT")
-        
-        try:
-            cursor.execute("SELECT auth_provider FROM users LIMIT 1")
-        except sqlite3.OperationalError:
-            print("⚠️  Adding 'auth_provider' column...")
-            cursor.execute("ALTER TABLE users ADD COLUMN auth_provider TEXT DEFAULT 'local'")
-        
-        try:
-            cursor.execute("SELECT google_id FROM users LIMIT 1")
-        except sqlite3.OperationalError:
-            print("⚠️  Adding 'google_id' column...")
-            cursor.execute("ALTER TABLE users ADD COLUMN google_id TEXT")
-        
-        try:
-            cursor.execute("SELECT updated_at FROM users LIMIT 1")
-        except sqlite3.OperationalError:
-            print("⚠️  Adding 'updated_at' column...")
-            cursor.execute("ALTER TABLE users ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-        
-        # ========== CREATE UNIQUE INDEX FOR GOOGLE_ID ==========
-        try:
-            cursor.execute("""
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_google_id 
-                ON users(google_id) 
-                WHERE google_id IS NOT NULL
-            """)
-        except sqlite3.OperationalError:
-            pass
-        
-        conn.commit()
-        conn.close()
-        print(f"✅ Auth Database initialized at: {DB_PATH}")
-    except Exception as e:
-        print(f"❌ Failed to init Auth Database: {e}")
-
-# Initialize on import
-init_user_database()
+# No separate init needed — schema.py handles the unified users table via ensure_demo_db()
 
 # ============================================================================
 # JWT HANDLERS
@@ -187,25 +128,13 @@ def verify_token(token: str) -> Optional[Dict]:
 def get_user_by_email(email: str) -> Optional[Dict]:
     """Get user by email address"""
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute(
+        conn = _get_conn()
+        row = conn.execute(
             "SELECT id, username, email, password_hash, role, full_name, auth_provider FROM users WHERE email = ?", 
             (email,)
-        )
-        user_data = cursor.fetchone()
+        ).fetchone()
         conn.close()
-        
-        if user_data:
-            return {
-                "id": user_data[0],
-                "username": user_data[1],
-                "email": user_data[2],
-                "password_hash": user_data[3],
-                "role": user_data[4],
-                "full_name": user_data[5],
-                "auth_provider": user_data[6],
-            }
+        return dict(row) if row else None
     except Exception as e:
         print(f"Auth DB Error: {e}")
     return None
@@ -213,23 +142,20 @@ def get_user_by_email(email: str) -> Optional[Dict]:
 def get_user_by_id(user_id: int) -> Optional[Dict]:
     """Get user by ID"""
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute(
+        conn = _get_conn()
+        row = conn.execute(
             "SELECT id, username, email, role, full_name, auth_provider FROM users WHERE id = ?", 
             (user_id,)
-        )
-        user_data = cursor.fetchone()
+        ).fetchone()
         conn.close()
-        
-        if user_data:
+        if row:
             return {
-                "id": user_data[0],
-                "username": user_data[1],
-                "email": user_data[2],
-                "role": user_data[3],
-                "fullName": user_data[4],
-                "auth_provider": user_data[5]
+                "id": row["id"],
+                "username": row["username"],
+                "email": row["email"],
+                "role": row["role"],
+                "fullName": row["full_name"],
+                "auth_provider": row["auth_provider"]
             }
     except Exception as e:
         print(f"Auth DB Error: {e}")
@@ -238,22 +164,19 @@ def get_user_by_id(user_id: int) -> Optional[Dict]:
 def get_user_by_google_id(google_id: str) -> Optional[Dict]:
     """Get user by Google ID"""
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute(
+        conn = _get_conn()
+        row = conn.execute(
             "SELECT id, username, email, role, full_name FROM users WHERE google_id = ?", 
             (google_id,)
-        )
-        user_data = cursor.fetchone()
+        ).fetchone()
         conn.close()
-        
-        if user_data:
+        if row:
             return {
-                "id": user_data[0],
-                "username": user_data[1],
-                "email": user_data[2],
-                "role": user_data[3],
-                "fullName": user_data[4],
+                "id": row["id"],
+                "username": row["username"],
+                "email": row["email"],
+                "role": row["role"],
+                "fullName": row["full_name"],
             }
     except Exception as e:
         print(f"Auth DB Error: {e}")
@@ -267,22 +190,19 @@ def get_user_by_token(token: str) -> Optional[Dict]:
     
     user_id = payload.get('user_id')
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute(
+        conn = _get_conn()
+        row = conn.execute(
             "SELECT id, username, email, role, full_name FROM users WHERE id = ?",
             (user_id,)
-        )
-        user_data = cursor.fetchone()
+        ).fetchone()
         conn.close()
-        
-        if user_data:
+        if row:
             return {
-                "id": user_data[0],
-                "username": user_data[1],
-                "email": user_data[2],
-                "role": user_data[3],
-                "fullName": user_data[4],
+                "id": row["id"],
+                "username": row["username"],
+                "email": row["email"],
+                "role": row["role"],
+                "fullName": row["full_name"],
             }
     except Exception as e:
         print(f"Auth DB Error: {e}")
@@ -308,9 +228,8 @@ def signup(username: str, email: str, password: str, role: str = "STUDENT") -> T
     password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute(
+        conn = _get_conn()
+        cursor = conn.execute(
             """INSERT INTO users 
                (username, email, password_hash, role, auth_provider) 
                VALUES (?, ?, ?, ?, ?)""",
@@ -383,9 +302,8 @@ def update_user_profile(user_id: int, username: str = None, email: str = None) -
     params.append(user_id)
     
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute(query, tuple(params))
+        conn = _get_conn()
+        conn.execute(query, tuple(params))
         conn.commit()
         conn.close()
         return True, "Profile updated successfully."
@@ -439,8 +357,7 @@ def google_auth_handler(token: str) -> Tuple[bool, Optional[Dict], str]:
             
             # Update google_id if not set, and update role if needed
             try:
-                conn = sqlite3.connect(DB_PATH)
-                cursor = conn.cursor()
+                conn = _get_conn()
                 
                 updates = []
                 params = []
@@ -459,7 +376,7 @@ def google_auth_handler(token: str) -> Tuple[bool, Optional[Dict], str]:
                     updates.append("auth_provider = 'google'")
                     query = f"UPDATE users SET {', '.join(updates)} WHERE id = ?"
                     params.append(user_id)
-                    cursor.execute(query, tuple(params))
+                    conn.execute(query, tuple(params))
                     conn.commit()
                 
                 conn.close()
@@ -473,9 +390,8 @@ def google_auth_handler(token: str) -> Tuple[bool, Optional[Dict], str]:
             username = email.split('@')[0]  # Use email prefix as username
             
             try:
-                conn = sqlite3.connect(DB_PATH)
-                cursor = conn.cursor()
-                cursor.execute(
+                conn = _get_conn()
+                cursor = conn.execute(
                     """INSERT INTO users 
                        (username, email, full_name, auth_provider, google_id, role) 
                        VALUES (?, ?, ?, ?, ?, ?)""",

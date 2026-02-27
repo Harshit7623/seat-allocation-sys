@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app
 from algo.database.db import get_db_connection
-from algo.auth_service import token_required
+from algo.services.auth_service import token_required
 
 feedback_bp = Blueprint('feedback', __name__)
 logger = logging.getLogger(__name__)

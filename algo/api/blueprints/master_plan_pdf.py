@@ -15,7 +15,7 @@ from reportlab.platypus import (
 )
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
-from algo.auth_service import token_required
+from algo.services.auth_service import token_required
 from algo.core.cache.cache_manager import CacheManager
 
 cache_manager = CacheManager()

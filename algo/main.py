@@ -32,13 +32,17 @@ from algo.api.blueprints.excel_export import excel_export_bp
 
 
 def create_app(test_config=None):
-    # Setup Logging
+    # Setup Logging (use UTF-8 for console handler to support emoji on Windows)
+    import sys as _sys
+    console_handler = logging.StreamHandler()
+    if hasattr(console_handler.stream, 'reconfigure'):
+        console_handler.stream.reconfigure(encoding='utf-8')
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(Config.LOG_FILE),
-            logging.StreamHandler()
+            logging.FileHandler(Config.LOG_FILE, encoding='utf-8'),
+            console_handler
         ]
     )
     logger = logging.getLogger(__name__)

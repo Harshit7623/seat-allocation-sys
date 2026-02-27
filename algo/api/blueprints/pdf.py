@@ -4,7 +4,7 @@ import os
 import logging
 from datetime import datetime
 from flask import Blueprint, request, jsonify, send_file
-from algo.auth_service import token_required
+from algo.services.auth_service import token_required
 from algo.core.cache.cache_manager import CacheManager
 
 pdf_bp = Blueprint('pdf', __name__, url_prefix='/api')

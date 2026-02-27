@@ -2,7 +2,7 @@
 # Handles user login/signup and provides utilities for bulk database table operations.
 from flask import Blueprint, jsonify, request, send_file, current_app
 from algo.database.db import get_db_connection
-from algo.auth_service import token_required, login as auth_login, signup as auth_signup, google_auth_handler, get_user_by_token, get_user_by_id, update_user_profile
+from algo.services.auth_service import token_required, login as auth_login, signup as auth_signup, google_auth_handler, get_user_by_token, get_user_by_id, update_user_profile
 import sqlite3
 
 # Helper for optional rate limiting

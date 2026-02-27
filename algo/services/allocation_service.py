@@ -438,6 +438,16 @@ class AllocationService:
             seating_matrix = seating_data.get('seating', [])
             allocated_students = []
             
+            # Bulk-fetch all pending students once → O(1) instead of O(seats) queries
+            all_students = StudentQueries.get_students_by_session(session_id)
+            already_allocated = set(AllocationQueries.get_allocated_student_ids(session_id))
+            
+            # Build enrollment → {id, batch_name} lookup for unallocated students only
+            enrollment_map = {}
+            for s in all_students:
+                if s['id'] not in already_allocated:
+                    enrollment_map[s['enrollment']] = {'id': s['id'], 'batch_name': s.get('batch_name')}
+            
             for row_idx, row in enumerate(seating_matrix):
                 if not isinstance(row, list):
                     continue
@@ -449,21 +459,12 @@ class AllocationService:
                     if not enrollment:
                         continue
                     
-                    # Find student
-                    cursor = db.execute("""
-                        SELECT s.id, s.batch_name
-                        FROM students s
-                        JOIN uploads u ON s.upload_id = u.id
-                        WHERE s.enrollment = ?
-                        AND u.session_id = ?
-                        AND s.id NOT IN (SELECT student_id FROM allocations WHERE session_id = ?)
-                    """, (enrollment, session_id, session_id))
+                    # Look up student from pre-fetched map
+                    student_info = enrollment_map.get(enrollment)
                     
-                    student_row = cursor.fetchone()
-                    
-                    if student_row:
+                    if student_info:
                         # Filter by batch if specified
-                        if selected_batch_names and student_row['batch_name'] not in selected_batch_names:
+                        if selected_batch_names and student_info['batch_name'] not in selected_batch_names:
                             continue
                         
                         # Insert allocation
@@ -474,14 +475,16 @@ class AllocationService:
                         """, (
                             session_id, 
                             classroom_id, 
-                            student_row['id'], 
+                            student_info['id'], 
                             enrollment,
                             f"{row_idx + 1}-{col_idx + 1}", 
-                            student_row['batch_name'], 
+                            student_info['batch_name'], 
                             seat.get('paper_set', 'A')
                         ))
                         
                         allocated_students.append(enrollment)
+                        # Remove from map to prevent double-allocation within same save
+                        del enrollment_map[enrollment]
             
             # Update session totals
             db.execute("""
