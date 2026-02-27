@@ -314,8 +314,8 @@ def _build_master_plan_pdf(
     # Column widths
     col_widths = [
         0.8 * cm,    # S.No
-        3.8 * cm,    # Branch
-        1.5 * cm,    # Semester
+        3.6 * cm,    # Branch  (-0.2 cm)
+        1.7 * cm,    # Semester (+0.2 cm)
         1.5 * cm,    # Room No.
         3.5 * cm,    # From
         3.5 * cm,    # To
