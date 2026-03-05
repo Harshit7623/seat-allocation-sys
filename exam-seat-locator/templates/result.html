@@ -115,11 +115,28 @@
               {% set cell = seat.seats[r][c] %}
               {% if r == seat.row and c == seat.col %}
                 {# Student's own seat #}
-                <div class="seat seat-mine" style="{% if cell.color %}--seat-color: {{ cell.color }};{% endif %}" title="{{ cell.roll_number }} - Set {{ cell.paper_set }} (Your Seat)">
+                {% if cell %}
+                <div class="seat seat-mine"
+                     id="seat-mine-tile"
+                     style="{{ '--seat-color: ' + cell.color + ';' if cell.color else '' }}"
+                     title="{{ cell.roll_number }} - Set {{ cell.paper_set }} (Your Seat)"
+                     data-roll="{{ cell.roll_number }}"
+                     data-name="{{ cell.student_name or '' }}"
+                     data-batch="{{ cell.batch_label or '' }}"
+                     data-set="{{ cell.paper_set }}"
+                     data-room="{{ seat.classroom_number }}"
+                     data-row="{{ r + 1 }}"
+                     data-col="{{ c + 1 }}"
+                     data-date="{{ seat.exam_date }}"
+                     data-start="{{ seat.start_time }}"
+                     data-end="{{ seat.end_time }}"
+                     data-color="{{ cell.color or '' }}"
+                     data-position="{{ cell.position or '' }}">
                   <span class="seat-label">{{ cell.roll_number }}</span>
                   <span class="seat-set">{{ cell.paper_set }}</span>
                   <span class="seat-badge">YOU</span>
                 </div>
+                {% endif %}
               {% elif cell %}
                 {# Other occupied seats or special states #}
                 {% if cell.status == "broken" %}
@@ -132,14 +149,14 @@
                   </div>
                 {% else %}
                   {# Normal occupied seat #}
-                  <div class="seat seat-occupied" style="{% if cell.color %}--seat-color: {{ cell.color }};{% endif %}" title="{{ cell.roll_number }} - Set {{ cell.paper_set }}">
+                  <div class="seat seat-occupied" style="{{ '--seat-color: ' + cell.color + ';' if cell.color else '' }}" title="{{ cell.roll_number }} - Set {{ cell.paper_set }}">
                     <span class="seat-label">{{ cell.roll_number }}</span>
                     <span class="seat-set">{{ cell.paper_set }}</span>
                   </div>
                 {% endif %}
               {% else %}
-                {# Empty seat #}
-                <div class="seat seat-empty" title="Empty">
+                {# Unallocated seat #}
+                <div class="seat seat-unallocated" title="Unallocated">
                   <span class="seat-label">-</span>
                 </div>
               {% endif %}
@@ -149,12 +166,11 @@
               {% endif %}
             {% endfor %}
           {% endfor %}
-        </div>
 
-        <!-- Column indicators (mirrors the seat grid column structure) -->
-        <div class="axis-row" style="grid-template-columns: {{ gtc_ns.gtc }};">
+          {# Column labels as final row inside the SAME grid — guarantees alignment #}
+          {%- set alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" -%}
           {% for c in range(seat.columns) %}
-            <div class="axis-label">C{{ c + 1 }}</div>
+            <div class="axis-label">{{ alpha[c] }}</div>
             {% if (c + 1) in ns.break_cols %}
               <div class="block-sep-col block-sep-axis" aria-hidden="true"></div>
             {% endif %}
@@ -175,10 +191,6 @@
         <span>Occupied</span>
       </div>
       <div class="legend-item">
-        <div class="legend-dot dot-empty"></div>
-        <span>Empty</span>
-      </div>
-      <div class="legend-item">
         <div class="legend-dot dot-unallocated"></div>
         <span>Unallocated</span>
       </div>
@@ -189,6 +201,46 @@
     </div>
 
     <a href="/" class="back-btn">← Search Again</a>
+
+    <!-- ── Seat Info Card Overlay ──────────────────────────────────────── -->
+    <div id="seat-info-overlay" class="seat-info-overlay" aria-hidden="true"></div>
+    <div id="seat-info-card" class="seat-info-card" role="dialog" aria-modal="true" aria-label="Your Seat Details">
+      <button class="sic-close" aria-label="Close">✕</button>
+      <div class="sic-header" id="sic-header">
+        <div class="sic-roll" id="sic-roll"></div>
+        <div class="sic-name" id="sic-name"></div>
+      </div>
+      <div class="sic-body">
+        <div class="sic-row">
+          <span class="sic-label">Batch</span>
+          <span class="sic-val" id="sic-batch"></span>
+        </div>
+        <div class="sic-row">
+          <span class="sic-label">Paper Set</span>
+          <span class="sic-val" id="sic-set"></span>
+        </div>
+        <div class="sic-row">
+          <span class="sic-label">Room</span>
+          <span class="sic-val" id="sic-room"></span>
+        </div>
+        <div class="sic-row">
+          <span class="sic-label">Grid Reference</span>
+          <span class="sic-val" id="sic-seat"></span>
+        </div>
+        <div class="sic-row">
+          <span class="sic-label">Seat Position</span>
+          <span class="sic-val" id="sic-pos"></span>
+        </div>
+        <div class="sic-row">
+          <span class="sic-label">Exam Date</span>
+          <span class="sic-val" id="sic-date"></span>
+        </div>
+        <div class="sic-row">
+          <span class="sic-label">Timings</span>
+          <span class="sic-val" id="sic-time"></span>
+        </div>
+      </div>
+    </div>
   </main>
 
   <footer>
@@ -207,9 +259,11 @@
 
     // Theme toggle handler
     themeToggle.addEventListener('change', () => {
+      document.body.classList.add('theme-transitioning');
       const newTheme = themeToggle.checked ? 'light' : 'dark';
       html.setAttribute('data-theme', newTheme);
       localStorage.setItem('theme', newTheme);
+      setTimeout(() => document.body.classList.remove('theme-transitioning'), 250);
     });
 
     // Animate the student's seat
@@ -223,6 +277,50 @@
       seat.style.animationDelay = `${i * 18}ms`;
       seat.classList.add('seat-reveal');
     });
+
+    // ── Seat Info Card ──────────────────────────────────────────────────
+    const mineCard    = document.getElementById('seat-mine-tile');
+    const infoCard    = document.getElementById('seat-info-card');
+    const infoOverlay = document.getElementById('seat-info-overlay');
+
+    function showInfoCard() {
+      if (!mineCard || !infoCard) return;
+      const d = mineCard.dataset;
+      document.getElementById('sic-roll').textContent  = d.roll;
+      document.getElementById('sic-name').textContent  = d.name  || '—';
+      document.getElementById('sic-batch').textContent = d.batch || '—';
+      document.getElementById('sic-set').textContent   = 'Set ' + d.set;
+      document.getElementById('sic-room').textContent  = d.room;
+      document.getElementById('sic-seat').textContent  = 'Row ' + d.row + ', Col ' + d.col;
+      document.getElementById('sic-pos').textContent   = d.position || '—';
+      document.getElementById('sic-date').textContent  = d.date;
+      document.getElementById('sic-time').textContent  = d.start + ' – ' + d.end;
+      // Apply seat colour to header strip (remove property if empty so CSS fallback activates)
+      const hdr = document.getElementById('sic-header');
+      if (d.color) {
+        hdr.style.setProperty('--sic-color', d.color);
+      } else {
+        hdr.style.removeProperty('--sic-color');
+      }
+      infoCard.classList.add('sic-visible');
+      infoOverlay.classList.add('sic-visible');
+      infoOverlay.setAttribute('aria-hidden', 'false');
+    }
+
+    function hideInfoCard() {
+      if (!infoCard) return;
+      infoCard.classList.remove('sic-visible');
+      infoOverlay.classList.remove('sic-visible');
+      infoOverlay.setAttribute('aria-hidden', 'true');
+    }
+
+    if (mineCard) {
+      mineCard.addEventListener('click', showInfoCard);
+      mineCard.style.cursor = 'pointer';
+    }
+    infoOverlay?.addEventListener('click', hideInfoCard);
+    document.querySelector('.sic-close')?.addEventListener('click', hideInfoCard);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') hideInfoCard(); });
   </script>
 </body>
 </html>

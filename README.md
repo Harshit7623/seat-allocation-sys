@@ -1,100 +1,123 @@
-# 🎓 Seat Allocation System (SeatWise)
+# Seat Allocation System
 
-A high-performance, intelligent seating management platform designed for educational institutions. SeatWise automates the process of generating examination seating plans, ensuring academic integrity through sophisticated algorithmic constraints and providing a premium administrative experience.
-
----
-
-## 🚀 CORE FEATURES
-
-- **Intelligent Seating Engine**: Automated generation based on room capacity, student count, and branching logic.
-- **Academic Integrity (Paper Sets)**: Strict A/B alternation following student sequence, skipping broken/empty seats for perfect isolation.
-- **Batch Isolation**: Smart spacing that prevents students from the same batch sitting together within classroom blocks.
-- **Adjacent Seating Option** 🆕: Conditional feature for single-batch allocations allowing same-batch students to sit adjacent while maintaining paper set alternation.
-- **Majority-Based Branch Detection** 🆕: Intelligent branch identification by sampling 3-5 students, correctly handling inter-branch program students.
-- **Dynamic Hall Visualization**: Interactive, responsive grid layout with aisle support and sub-room blocking.
-- **Student Data Management**: Robust ingestion of student records with support for real enrollment strings.
-- **Comprehensive Reporting**: Generation of automated Attendance Sheets (PDF), Seating Charts (PDF), and Room Statistics.
-- **Administrative Portal**: Secure dashboard with JWT/Google OAuth2 authentication and multi-user data isolation.
-- **Hybrid Caching**: Optimized performance using a dual filesystem/database caching strategy for instant layout retrieval.
+Two-part project: an admin seating plan generator (`algo/`) and a student-facing seat locator (`exam-seat-locator/`).
 
 ---
 
-## 🧠 SMART SEATING ALGORITHM
+## What It Does
 
-The system utilizes a custom **Column-Major Multi-Constraint Algorithm** (`seating.py`) to handle complex room layouts.
+- **algo/** — Generates examination seating plans as `PLAN-*.json` files
+  - Column-major multi-constraint algorithm with A/B paper set alternation
+  - Batch isolation, broken-seat handling, adjacent-seating option
+  - Outputs PDF attendance sheets + seating charts
+  - Admin portal with JWT / Google OAuth2
 
-### Key Logic Points:
-1.  **Block-Aware Isolation**:
-    *   **In-Block**: Strictly enforces at least one column gap (empty seat or different batch) between students of the same branch within a physical desk block.
-    *   **Across-Aisle**: Intelligently allows same-batch adjacency across block boundaries (aisles) to maximize seat utilization while maintaining social distancing.
-2.  **Sequence-Aware Paper Sets**:
-    *   The algorithm treats students as an ordered sequence in each row/column, **strictly skipping broken and empty seats**.
-    *   If a student's same-batch predecessor in a sequence had "Set A", the current student receives "Set B", even if separated by gaps.
-    *   **Physical Priority**: In conflict cases, physical adjacency (dist 1) takes precedence to ensure side-by-side neighbors never share the same set.
-3.  **Physical Integrity & Validation**:
-    *   Ensures a checkerboard pattern for ALL students to prevent copying from immediate neighbors.
-    *   **Pragmatic Validator**: Distinguishes between critical physical collisions (Errors) and layout-forced sequence gaps (Warnings), ensuring valid plans are correctly marked.
+- **exam-seat-locator/** — Lightweight Flask app for students to find their seat
+  - Enter roll number + exam date + time → instantly shows classroom grid
+  - Your seat highlighted; click it for a detail card (room, position, batch, set, grid ref)
+  - Multi-file LRU cache — O(1) lookups, full dataset fits in L3 cache
+  - Upload new plan files at runtime with no restart
 
 ---
 
-## 🎨 UI & VISUALIZATION
+## Project Structure
 
-Built for high readability and professional aesthetics:
-- **Responsive Seat Cards**: Dynamic sizing that prevents text wrapping for long enrollment IDs.
-- **Status Indicators**: Real-time "Constraint Validation" dashboard showing the health of the current layout.
-- **Glassmorphism Design**: Modern, premium aesthetic with glassy navbar borders, subtle blurs, sleek gradients, and micro-animations.
-- **Aisle Implementation**: Logical blocks (e.g., 3-seater desks) are separated by clear visual aisles for realistic floor planning.
-
----
-
-## 🛠️ TECHNICAL ARCHITECTURE
-
-### Backend (Python/Flask)
-- **Framework**: Flask with Blueprints for modularity.
-- **Database**: SQLite with SQLAlchemy ORM.
-- **Security**: JWT tokens + Google Identity Services (OAuth2).
-- **Services**: Dedicated services for Data Ingestion, PDF Generation, and Cache Management.
-
-### Frontend (React/Vite)
-- **Library**: React 18 with modern Hook-based architecture.
-- **Styling**: Vanilla CSS for precision layouts + Tailwind CSS for utility-first components.
-- **State**: Context API for global session management.
-- **Animations**: Framer Motion for smooth transitions and hover effects.
-
----
-
-## 📊 PROJECT HEALTH & METRICS
-
-*Last updated: 9 February 2026*
-
-| Category | Metric | Rating |
-| :--- | :--- | :--- |
-| **Code Base** | ~28,000 LOC | Professional |
-| **Documentation** | 18% of Codebase | Excellent |
-| **API Coverage** | 70+ Endpoints | Comprehensive |
-| **Performance** | <100ms Allocation Generation | High Speed |
-### 📊 Lines of Code (LOC) Analysis
-| Component | Lines of Code | Complexity |
-| :--- | :--- | :--- |
-| **Backend (Active)** | 8,696 | High (70+ Endpoints) |
-| **Backend (Legacy/Old)** | 7,208 | High (Original Logic) |
-| **Frontend (React/CSS)** | 10,968 | Medium (35+ Components) |
-| **Documentation (.md)** | 1,170 | Excellent |
-| **TOTAL** | **28,042** | **Full Audit Verified** |
-
-> [!NOTE]
-> The backend accounts for **~57%** of the project's logic when including legacy cores and services, reflecting the high complexity of the seating algorithms.
+```
+seat-allocation-sys/
+├── algo/                        # Seating plan generator (Flask + algorithm)
+│   ├── app.py
+│   ├── main.py
+│   ├── api/                     # REST endpoints (70+)
+│   ├── core/                    # Seating algorithm
+│   ├── services/                # PDF gen, data ingestion
+│   ├── database/                # SQLite + SQLAlchemy models
+│   └── requirements.txt
+│
+├── exam-seat-locator/           # Student seat finder (Flask)
+│   ├── app.py                   # Routes: /, /search, /upload, /reload
+│   ├── config.py
+│   ├── seat_service.py
+│   ├── core/
+│   │   ├── cache.py             # AppCache — LRU + summary index coordinator
+│   │   ├── lru_cache.py         # Thread-safe LRU (OrderedDict, maxsize=5)
+│   │   ├── plan_index.py        # summary_index.json builder/loader
+│   │   ├── extractor.py         # Session extraction from plan dict
+│   │   ├── indexer.py           # O(1) student/session index builder
+│   │   ├── loader.py            # JSON file reader + date parser
+│   │   └── matrix.py            # 2-D seat matrix constructor
+│   ├── data/                    # PLAN-*.json files
+│   ├── templates/
+│   │   ├── index.html           # Search form (date/time dropdowns from cache)
+│   │   └── result.html          # Classroom grid + click-to-open info card
+│   ├── static/
+│   │   └── style.css
+│   └── requirements.txt
+│
+├── Frontend/                    # React + Vite admin UI
+│   ├── src/
+│   └── package.json
+│
+├── tests/                       # Pytest suite
+├── Details/                     # Architecture docs
+├── README.md
+└── updates.md
+```
 
 ---
 
-## 📄 DOCUMENTATION LINKS
+## How to Run
 
-For deeper technical insights, please refer to:
-- [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md): Data flow and structural guides.
-- [TECHNICAL_DEVELOPER_GUIDE.md](TECHNICAL_DEVELOPER_GUIDE.md): API references and quick start.
-- [ALGORITHM_SPECIFICATION.md](ALGORITHM_SPECIFICATION.md): Detailed breakdown of the seating math.
+### exam-seat-locator (student seat finder)
+
+```bash
+cd exam-seat-locator
+pip install -r requirements.txt
+
+# Place one or more PLAN-*.json files in data/
+python app.py
+# → http://127.0.0.1:5000
+```
+
+### algo (plan generator + admin)
+
+```bash
+cd algo
+pip install -r requirements.txt
+python main.py
+# → http://127.0.0.1:5000
+```
+
+### Frontend (React admin UI)
+
+```bash
+cd Frontend
+npm install
+npm run dev
+# → http://localhost:5173
+```
 
 ---
 
-Generated by SeatWise Core Development Team.  
-*Precision Seating, Professional Results.*
+## Tech Stack
+
+| Layer | Tech |
+|---|---|
+| Backend | Python 3.13, Flask |
+| Cache | In-memory LRU (OrderedDict) + `summary_index.json` |
+| Database | SQLite + SQLAlchemy ORM |
+| Auth | JWT + Google OAuth2 |
+| Frontend | React 18, Vite, Tailwind CSS |
+| PDF | ReportLab |
+
+---
+
+## Performance (exam-seat-locator)
+
+| Scenario | Time |
+|---|---|
+| Warm search (LRU hit) | ~4-9ms |
+| Cold search (LRU miss, NVMe read) | ~80-190ms (once per file) |
+| Info card open | <1ms JS + 300ms animation |
+| RAM footprint (788 students, 3 files) | ~65MB |
+
+All indexes (~8MB) fit entirely in L3 cache (16MB) after first few requests.

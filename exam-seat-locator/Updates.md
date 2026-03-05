@@ -183,7 +183,7 @@ Every request:
 ---
 
 
-for cache Management read the memory management file .
+for cache Management read the [memory management](exam-seat-locator/memory Management.md) file .
 
 ## Memory Layout (Current State)
 ```powershell

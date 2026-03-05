@@ -69,14 +69,12 @@
         <div class="field-group">
           <label for="exam_date" class="field-label">Exam Date</label>
           <div class="field-wrapper">
-            <input
-              type="date"
-              id="exam_date"
-              name="exam_date"
-              class="field-input"
-              required
-            />
-            <span class="field-icon">📅</span>
+            <select id="exam_date" name="exam_date" class="field-input field-select" required>
+              <option value="" disabled selected>Select exam date</option>
+              {% for d in dates %}
+                <option value="{{ d }}">{{ d }}</option>
+              {% endfor %}
+            </select>
           </div>
         </div>
 
@@ -166,9 +164,11 @@
 
     // Theme toggle handler
     themeToggle.addEventListener('change', () => {
+      document.body.classList.add('theme-transitioning');
       const newTheme = themeToggle.checked ? 'light' : 'dark';
       html.setAttribute('data-theme', newTheme);
       localStorage.setItem('theme', newTheme);
+      setTimeout(() => document.body.classList.remove('theme-transitioning'), 250);
     });
 
     // Animate form fields on focus

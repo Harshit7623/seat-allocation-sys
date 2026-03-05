@@ -68,6 +68,7 @@ def build_seat_matrix(room_config: dict, students: list) -> list[list]:
                 "student_name":  student.get("student_name", ""),
                 "batch_label":   student.get("batch_label", ""),
                 "color":         student.get("color", ""),
+                "position":      position,
                 "is_broken":     student.get("is_broken", False),
                 "is_unallocated":student.get("is_unallocated", False),
             }
