@@ -1,12 +1,12 @@
 """
 FastAPI Backend for Exam Invigilation Reporting System
-Main application file
+Updated: March 3, 2026 - Added Google Auth, Time-slot based storage, Edit functionality
 """
 
 import hashlib
 import base64
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Union
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(
     title="Exam Invigilation Reporting System",
-    description="Backend API for managing exam invigilation reports",
-    version="1.0.0"
+    description="Backend API for managing exam invigilation reports with time-slot based storage",
+    version="2.0.0"
 )
 
 # Configure CORS
@@ -46,27 +46,42 @@ app.add_middleware(
 
 class ReportBase(BaseModel):
     """Base model for report data"""
-    exam_code: str
+    user_email: str
     exam_date: str
-    session: str
+    exam_time: str
+    faculty_invigilator1: str
+    faculty_invigilator2: str
+    faculty_invigilator3: Optional[str] = ''
+    blank_copies_received: int
+    copies_used: int
+    cancelled_copies: int = 0
+    copies_returned: int
     room_number: str
-    students_present: int
-    main_sheets: int
-    supplementary_sheets: int
+    class1: str
+    subject_class1: str
+    students_class1: int
+    class2: Optional[str] = ''
+    subject_class2: Optional[str] = ''
+    students_class2: Optional[int] = 0
+    class3: Optional[str] = ''
+    subject_class3: Optional[str] = ''
+    students_class3: Optional[int] = 0
+    remarks: Optional[str] = ''
     
-    @validator('exam_code', 'room_number')
+    @validator('user_email', 'faculty_invigilator1', 'faculty_invigilator2', 'room_number', 'class1', 'subject_class1')
     def validate_not_empty(cls, v):
         if not v or not v.strip():
             raise ValueError('Field cannot be empty')
         return v.strip()
     
-    @validator('session')
-    def validate_session(cls, v):
-        if v not in ['Morning', 'Afternoon']:
-            raise ValueError('Session must be Morning or Afternoon')
+    @validator('exam_time')
+    def validate_time_slot(cls, v):
+        valid_slots = ['9AM-11AM', '11AM-1PM', '1PM-4PM', '4PM-6PM']
+        if v not in valid_slots:
+            raise ValueError(f'Time slot must be one of: {", ".join(valid_slots)}')
         return v
     
-    @validator('students_present', 'main_sheets', 'supplementary_sheets')
+    @validator('blank_copies_received', 'copies_used', 'cancelled_copies', 'copies_returned', 'students_class1')
     def validate_positive(cls, v):
         if v < 0:
             raise ValueError('Value must be non-negative')
@@ -84,20 +99,19 @@ class ReportResponse(BaseModel):
 # HELPER FUNCTIONS
 # ========================================
 
-def generate_record_id(exam_code: str, exam_date: str, session: str, room_number: str) -> str:
+def generate_record_id(user_email: str, exam_date: str, exam_time: str) -> str:
     """
     Generate unique record ID using hash of unique fields
     
     Args:
-        exam_code: Exam code
+        user_email: User's email address
         exam_date: Exam date
-        session: Session (Morning/Afternoon)
-        room_number: Room number
+        exam_time: Time slot
         
     Returns:
         SHA256 hash string (first 16 characters)
     """
-    unique_string = f"{exam_code.lower()}|{exam_date}|{session.lower()}|{room_number.lower()}"
+    unique_string = f"{user_email.lower()}|{exam_date}|{exam_time}"
     hash_object = hashlib.sha256(unique_string.encode())
     return hash_object.hexdigest()[:16]
 
@@ -128,7 +142,8 @@ async def send_to_google_apps_script(
     headers = {}
     
     try:
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        timeout = httpx.Timeout(settings.APPS_SCRIPT_TIMEOUT_SECONDS)
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
             if files:
                 # Send multipart/form-data
                 response = await client.post(
@@ -223,37 +238,49 @@ async def health_check():
 
 @app.post("/api/submit-report", response_model=ReportResponse)
 async def submit_report(
-    exam_code: str = Form(...),
+    user_email: str = Form(...),
     exam_date: str = Form(...),
-    session: str = Form(...),
+    exam_time: str = Form(...),
+    faculty_invigilator1: str = Form(...),
+    faculty_invigilator2: str = Form(...),
+    faculty_invigilator3: str = Form(''),
+    blank_copies_received: int = Form(...),
+    copies_used: int = Form(...),
+    cancelled_copies: int = Form(0),
+    copies_returned: int = Form(...),
     room_number: str = Form(...),
-    students_present: int = Form(...),
-    main_sheets: int = Form(...),
-    supplementary_sheets: int = Form(...),
-    attendance_image: List[UploadFile] = File(...),
+    class1: str = Form(...),
+    subject_class1: str = Form(...),
+    students_class1: int = Form(...),
+    class2: str = Form(''),
+    subject_class2: str = Form(''),
+    students_class2: int = Form(0),
+    class3: str = Form(''),
+    subject_class3: str = Form(''),
+    students_class3: int = Form(0),
+    remarks: str = Form(''),
+    attendance_images: List[UploadFile] = File(...),
     record_id: Optional[str] = Form(None)
 ):
     """
     Submit new exam invigilation report
-    
-    If a report with the same unique identifiers exists, it will be updated.
-    Otherwise, a new report will be created.
+    Data is stored in different Google Sheets based on time slot
     """
     try:
-        logger.info(f"Submitting report for {exam_code} - {exam_date} - {session} - {room_number}")
+        logger.info(f"Submitting report for {user_email} - {exam_date} - {exam_time}")
         
         # Generate record ID
-        computed_record_id = generate_record_id(exam_code, exam_date, session, room_number)
+        computed_record_id = generate_record_id(user_email, exam_date, exam_time)
         
         # Validate and process image(s)
-        if not attendance_image:
+        if not attendance_images:
             raise HTTPException(
                 status_code=400,
                 detail="At least one attendance image is required"
             )
 
         image_payloads = []
-        for image in attendance_image:
+        for image in attendance_images:
             validate_image_file(image)
             image_data = await image.read()
             image_payloads.append({
@@ -265,17 +292,28 @@ async def submit_report(
         # Prepare data for Google Apps Script
         payload = {
             "record_id": computed_record_id,
-            "exam_code": exam_code.strip(),
+            "user_email": user_email.strip(),
             "exam_date": exam_date,
-            "session": session,
+            "exam_time": exam_time,
+            "faculty_invigilator1": faculty_invigilator1.strip(),
+            "faculty_invigilator2": faculty_invigilator2.strip(),
+            "faculty_invigilator3": faculty_invigilator3.strip() if faculty_invigilator3 else '',
+            "blank_copies_received": blank_copies_received,
+            "copies_used": copies_used,
+            "cancelled_copies": cancelled_copies,
+            "copies_returned": copies_returned,
             "room_number": room_number.strip(),
-            "students_present": students_present,
-            "main_sheets": main_sheets,
-            "supplementary_sheets": supplementary_sheets,
-            "image_payloads": image_payloads,
-            "image_data": image_payloads[0]["image_data"],
-            "image_filename": image_payloads[0]["image_filename"],
-            "image_content_type": image_payloads[0]["image_content_type"]
+            "class1": class1.strip(),
+            "subject_class1": subject_class1.strip(),
+            "students_class1": students_class1,
+            "class2": class2.strip() if class2 else '',
+            "subject_class2": subject_class2.strip() if subject_class2 else '',
+            "students_class2": students_class2 if students_class2 else 0,
+            "class3": class3.strip() if class3 else '',
+            "subject_class3": subject_class3.strip() if subject_class3 else '',
+            "students_class3": students_class3 if students_class3 else 0,
+            "remarks": remarks.strip() if remarks else '',
+            "image_payloads": image_payloads
         }
         
         # Send to Google Apps Script
@@ -305,20 +343,12 @@ async def submit_report(
 
 
 @app.get("/api/get-report", response_model=ReportResponse)
-async def get_report(
-    exam_code: str,
-    exam_date: str,
-    session: str,
-    room_number: str
-):
+async def get_report(record_id: str):
     """
-    Retrieve existing exam invigilation report
+    Retrieve existing exam invigilation report by record ID
     """
     try:
-        logger.info(f"Fetching report for {exam_code} - {exam_date} - {session} - {room_number}")
-        
-        # Generate record ID
-        record_id = generate_record_id(exam_code, exam_date, session, room_number)
+        logger.info(f"Fetching report with record_id: {record_id}")
         
         # Request from Google Apps Script
         payload = {
@@ -352,16 +382,30 @@ async def get_report(
 
 @app.post("/api/update-report", response_model=ReportResponse)
 async def update_report(
-    exam_code: str = Form(...),
+    user_email: str = Form(...),
     exam_date: str = Form(...),
-    session: str = Form(...),
+    exam_time: str = Form(...),
+    faculty_invigilator1: str = Form(...),
+    faculty_invigilator2: str = Form(...),
+    faculty_invigilator3: str = Form(''),
+    blank_copies_received: int = Form(...),
+    copies_used: int = Form(...),
+    cancelled_copies: int = Form(0),
+    copies_returned: int = Form(...),
     room_number: str = Form(...),
-    students_present: int = Form(...),
-    main_sheets: int = Form(...),
-    supplementary_sheets: int = Form(...),
+    class1: str = Form(...),
+    subject_class1: str = Form(...),
+    students_class1: int = Form(...),
+    class2: str = Form(''),
+    subject_class2: str = Form(''),
+    students_class2: int = Form(0),
+    class3: str = Form(''),
+    subject_class3: str = Form(''),
+    students_class3: int = Form(0),
+    remarks: str = Form(''),
     record_id: str = Form(...),
-    attendance_image: Optional[List[UploadFile]] = File(None),
-    existing_image_url: Optional[str] = Form(None)
+    attendance_images: Optional[Union[UploadFile, List[UploadFile]]] = File(None),
+    existing_image_urls: Optional[str] = Form(None)
 ):
     """
     Update existing exam invigilation report
@@ -369,28 +413,41 @@ async def update_report(
     try:
         logger.info(f"Updating report with record_id: {record_id}")
         
-        # Verify record_id matches the provided data
-        computed_record_id = generate_record_id(exam_code, exam_date, session, room_number)
-        if computed_record_id != record_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Record ID mismatch. Cannot update unique identifiers."
-            )
-        
         # Prepare data
         payload = {
             "record_id": record_id,
-            "exam_code": exam_code.strip(),
+            "user_email": user_email.strip(),
             "exam_date": exam_date,
-            "session": session,
+            "exam_time": exam_time,
+            "faculty_invigilator1": faculty_invigilator1.strip(),
+            "faculty_invigilator2": faculty_invigilator2.strip(),
+            "faculty_invigilator3": faculty_invigilator3.strip() if faculty_invigilator3 else '',
+            "blank_copies_received": blank_copies_received,
+            "copies_used": copies_used,
+            "cancelled_copies": cancelled_copies,
+            "copies_returned": copies_returned,
             "room_number": room_number.strip(),
-            "students_present": students_present,
-            "main_sheets": main_sheets,
-            "supplementary_sheets": supplementary_sheets
+            "class1": class1.strip(),
+            "subject_class1": subject_class1.strip(),
+            "students_class1": students_class1,
+            "class2": class2.strip() if class2 else '',
+            "subject_class2": subject_class2.strip() if subject_class2 else '',
+            "students_class2": students_class2 if students_class2 else 0,
+            "class3": class3.strip() if class3 else '',
+            "subject_class3": subject_class3.strip() if subject_class3 else '',
+            "students_class3": students_class3 if students_class3 else 0,
+            "remarks": remarks.strip() if remarks else ''
         }
         
         # Handle image update (optional)
-        valid_images = [img for img in (attendance_image or []) if img and img.filename]
+        if isinstance(attendance_images, list):
+            uploaded_images = attendance_images
+        elif attendance_images:
+            uploaded_images = [attendance_images]
+        else:
+            uploaded_images = []
+
+        valid_images = [img for img in uploaded_images if img and getattr(img, 'filename', None)]
         if valid_images:
             image_payloads = []
             for image in valid_images:
@@ -403,11 +460,8 @@ async def update_report(
                 })
 
             payload["image_payloads"] = image_payloads
-            payload["image_data"] = image_payloads[0]["image_data"]
-            payload["image_filename"] = image_payloads[0]["image_filename"]
-            payload["image_content_type"] = image_payloads[0]["image_content_type"]
         else:
-            payload["existing_image_url"] = existing_image_url
+            payload["existing_image_urls"] = existing_image_urls
         
         # Send to Google Apps Script
         result = await send_to_google_apps_script("update", payload)

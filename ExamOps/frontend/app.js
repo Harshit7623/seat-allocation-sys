@@ -1,6 +1,6 @@
 /**
- * Exam Invigilation Reporting System - Frontend Logic
- * Mobile-first, Vanilla JavaScript implementation
+ * Exam Invigilation Reporting System - Frontend Logic with Google Auth
+ * Updated: March 3, 2026
  */
 
 // ========================================
@@ -9,14 +9,16 @@
 const CONFIG = {
     API_BASE_URL: 'http://localhost:8010/api',
     API_BASE_URLS: [
-        'http://localhost:8010/api',
-        'http://localhost:8000/api'
+        'http://localhost:8010/api'
     ],
     MAX_IMAGE_SIZE_MB: 5,
     MAX_IMAGE_DIMENSION: 1920,
     IMAGE_QUALITY: 0.8,
     RETRY_ATTEMPTS: 3,
-    RETRY_DELAY_MS: 1000
+    RETRY_DELAY_MS: 1000,
+    THEME_STORAGE_KEY: 'preferredTheme',
+    // Note: Replace with your actual Google Client ID
+    GOOGLE_CLIENT_ID: '647849200108-2t4bc5a9q85ppoqhmh8t6rftk923ql9s.apps.googleusercontent.com'
 };
 
 function getApiBaseUrls() {
@@ -30,36 +32,163 @@ function getApiBaseUrls() {
 // ========================================
 // STATE MANAGEMENT
 // ========================================
+let currentUser = null;
+let userTimeSlot = null;
+let lastSubmittedRecordId = null;
 let isEditMode = false;
-let currentRecordId = null;
+let existingImageUrls = '';
 
 // ========================================
 // DOM ELEMENTS
 // ========================================
 const elements = {
+    loginSection: document.getElementById('loginSection'),
+    appSection: document.getElementById('appSection'),
+    userName: document.getElementById('userName'),
+    userPhoto: document.getElementById('userPhoto'),
+    signOutBtn: document.getElementById('signOutBtn'),
+    themeToggleBtn: document.getElementById('themeToggleBtn'),
     form: document.getElementById('invigilationForm'),
     submitBtn: document.getElementById('submitBtn'),
-    editBtn: document.getElementById('editBtn'),
     resetBtn: document.getElementById('resetBtn'),
     formTitle: document.getElementById('formTitle'),
     alertBox: document.getElementById('alertBox'),
     alertMessage: document.getElementById('alertMessage'),
     loadingSpinner: document.getElementById('loadingSpinner'),
-    editModal: document.getElementById('editModal'),
+    loadingMessage: document.getElementById('loadingMessage'),
+    successBox: document.getElementById('successBox'),
+    successMessage: document.getElementById('successMessage'),
+    editResponseBtn: document.getElementById('editResponseBtn'),
+    submitNewResponseBtn: document.getElementById('submitNewResponseBtn'),
+    examMeridiem: document.getElementById('examMeridiem'),
+    examTimeSlotHint: document.getElementById('examTimeSlotHint'),
     attendanceImage: document.getElementById('attendanceImage'),
     fileNameDisplay: document.getElementById('fileNameDisplay'),
     imagePreview: document.getElementById('imagePreview'),
-    recordIdField: document.getElementById('recordId'),
-    existingImageUrl: document.getElementById('existingImageUrl')
+    existingImagePreview: document.getElementById('existingImagePreview'),
+    userEmail: document.getElementById('userEmail'),
+    recordId: document.getElementById('recordId')
 };
+
+// ========================================
+// GOOGLE AUTHENTICATION
+// ========================================
+
+/**
+ * Handle Google Sign-In response
+ */
+function handleCredentialResponse(response) {
+    const credential = response.credential;
+    const payload = parseJwt(credential);
+    
+    currentUser = {
+        email: payload.email,
+        name: payload.name,
+        picture: payload.picture,
+        sub: payload.sub
+    };
+    
+    // Store user in localStorage
+    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    
+    // Update UI
+    showAppSection();
+}
+
+/**
+ * Parse JWT token
+ */
+function parseJwt(token) {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(c => {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(jsonPayload);
+}
+
+/**
+ * Show app section after login
+ */
+function showAppSection() {
+    elements.loginSection.classList.add('hidden');
+    elements.appSection.classList.remove('hidden');
+    elements.userName.textContent = currentUser.name;
+    elements.userPhoto.src = currentUser.picture;
+    elements.userEmail.value = currentUser.email;
+}
+
+/**
+ * Sign out
+ */
+function signOut() {
+    currentUser = null;
+    userTimeSlot = null;
+    lastSubmittedRecordId = null;
+    localStorage.removeItem('currentUser');
+    localStorage.removeItem('userTimeSlot');
+    
+    elements.appSection.classList.add('hidden');
+    elements.loginSection.classList.remove('hidden');
+    resetForm();
+}
 
 // ========================================
 // INITIALIZATION
 // ========================================
 document.addEventListener('DOMContentLoaded', () => {
+    syncGoogleClientId();
+    initializeTheme();
+
+    // Check if user is already logged in
+    const savedUser = localStorage.getItem('currentUser');
+    if (savedUser) {
+        currentUser = JSON.parse(savedUser);
+        showAppSection();
+    }
+    
     initializeEventListeners();
     setMaxDateToToday();
 });
+
+/**
+ * Keep Google Sign-In client ID in sync from JS config
+ */
+function syncGoogleClientId() {
+    const gsiContainer = document.getElementById('g_id_onload');
+    if (gsiContainer && CONFIG.GOOGLE_CLIENT_ID) {
+        gsiContainer.setAttribute('data-client_id', CONFIG.GOOGLE_CLIENT_ID);
+    }
+}
+
+/**
+ * Initialize and apply saved UI theme
+ */
+function initializeTheme() {
+    const savedTheme = localStorage.getItem(CONFIG.THEME_STORAGE_KEY);
+    applyTheme(savedTheme || 'light');
+}
+
+/**
+ * Apply theme class and update toggle label
+ */
+function applyTheme(theme) {
+    const isDark = theme === 'dark';
+    document.body.classList.toggle('dark-theme', isDark);
+
+    if (elements.themeToggleBtn) {
+        elements.themeToggleBtn.textContent = isDark ? '☀️ Light' : '🌙 Dark';
+    }
+}
+
+/**
+ * Toggle theme and persist preference
+ */
+function toggleTheme() {
+    const nextTheme = document.body.classList.contains('dark-theme') ? 'light' : 'dark';
+    localStorage.setItem(CONFIG.THEME_STORAGE_KEY, nextTheme);
+    applyTheme(nextTheme);
+}
 
 /**
  * Initialize all event listeners
@@ -68,14 +197,27 @@ function initializeEventListeners() {
     // Form submission
     elements.form.addEventListener('submit', handleFormSubmit);
     
-    // Edit button
-    elements.editBtn.addEventListener('click', openEditModal);
+    // Sign out button
+    elements.signOutBtn.addEventListener('click', signOut);
+    
+    // Edit response button
+    elements.editResponseBtn.addEventListener('click', loadLastSubmissionForEdit);
+
+    // Submit new response button
+    elements.submitNewResponseBtn.addEventListener('click', showNewResponseForm);
+
+    // Theme toggle
+    elements.themeToggleBtn.addEventListener('click', toggleTheme);
     
     // File input change
     elements.attendanceImage.addEventListener('change', handleFileSelect);
+
+    // Exam time change (auto map to slot)
+    document.getElementById('examTime').addEventListener('input', handleExamTimeInput);
+    elements.examMeridiem.addEventListener('change', handleExamTimeInput);
     
     // Real-time validation
-    const inputs = elements.form.querySelectorAll('input, select');
+    const inputs = elements.form.querySelectorAll('input, select, textarea');
     inputs.forEach(input => {
         input.addEventListener('blur', () => validateField(input));
         input.addEventListener('input', () => clearFieldError(input.id));
@@ -86,9 +228,45 @@ function initializeEventListeners() {
  * Set maximum date to today for date input
  */
 function setMaxDateToToday() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayLocalDateString();
     document.getElementById('examDate').setAttribute('max', today);
-    document.getElementById('editExamDate').setAttribute('max', today);
+}
+
+/**
+ * Convert backend date values to HTML date input format (YYYY-MM-DD)
+ */
+function toDateInputValue(value) {
+    if (!value) {
+        return '';
+    }
+
+    const normalized = String(value).trim();
+
+    // Already in expected format
+    if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+        return normalized;
+    }
+
+    const parsedDate = new Date(normalized);
+    if (Number.isNaN(parsedDate.getTime())) {
+        return '';
+    }
+
+    const year = parsedDate.getFullYear();
+    const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(parsedDate.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+/**
+ * Get today's date as YYYY-MM-DD in local timezone
+ */
+function getTodayLocalDateString() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 // ========================================
@@ -99,94 +277,213 @@ function setMaxDateToToday() {
  * Validate individual field
  */
 function validateField(field) {
-    const id = field.id;
     const value = field.value.trim();
-    let isValid = true;
-    let errorMessage = '';
+    const fieldId = field.id;
+    const errorElement = document.getElementById(`${fieldId}Error`);
     
-    switch(id) {
-        case 'examCode':
-            if (!value) {
-                errorMessage = 'Exam code is required';
-                isValid = false;
-            } else if (!/^[A-Za-z0-9\s\-]+$/.test(value)) {
-                errorMessage = 'Invalid exam code format';
-                isValid = false;
-            }
-            break;
-            
+    if (!errorElement) return true;
+    
+    // Check if field is required
+    if (field.hasAttribute('required') && !value) {
+        showFieldError(fieldId, 'This field is required');
+        return false;
+    }
+    
+    // Specific validations
+    switch (fieldId) {
         case 'examDate':
-            if (!value) {
-                errorMessage = 'Exam date is required';
-                isValid = false;
-            }
-            break;
-            
-        case 'session':
-            if (!value) {
-                errorMessage = 'Session is required';
-                isValid = false;
-            }
-            break;
-            
-        case 'roomNumber':
-            if (!value) {
-                errorMessage = 'Room number is required';
-                isValid = false;
-            }
-            break;
-            
-        case 'studentsPresent':
-        case 'mainSheets':
-        case 'supplementarySheets':
-            if (value === '' || value < 0) {
-                errorMessage = 'Please enter a valid number (0 or greater)';
-                isValid = false;
-            }
-            break;
-            
+            return validateDate(value, fieldId);
+        case 'examTime':
+            return validateExamTime(value, fieldId);
+        case 'blankCopiesReceived':
+        case 'copiesUsed':
+        case 'cancelledCopies':
+        case 'copiesReturned':
+        case 'studentsClass1':
+        case 'studentsClass2':
+        case 'studentsClass3':
+            return validateNumber(value, fieldId);
         case 'attendanceImage':
-            if (!isEditMode && !field.files.length) {
-                errorMessage = 'Attendance sheet image is required';
-                isValid = false;
-            }
-            break;
+            return validateFiles();
     }
     
-    if (!isValid) {
-        showFieldError(id, errorMessage);
-    } else {
-        clearFieldError(id);
-    }
-    
-    return isValid;
+    clearFieldError(fieldId);
+    return true;
 }
 
 /**
- * Validate entire form
+ * Convert HH:mm to total minutes
  */
-function validateForm() {
-    let isValid = true;
-    const requiredFields = [
-        'examCode', 'examDate', 'session', 'roomNumber',
-        'studentsPresent', 'mainSheets', 'supplementarySheets'
-    ];
-    
-    requiredFields.forEach(fieldId => {
-        const field = document.getElementById(fieldId);
-        if (!validateField(field)) {
-            isValid = false;
-        }
-    });
-    
-    // Validate attendance image
-    const imageField = elements.attendanceImage;
-    if (!isEditMode && !imageField.files.length && !elements.existingImageUrl.value) {
-        showFieldError('attendanceImage', 'Attendance sheet image is required');
-        isValid = false;
+function toMinutes(timeValue) {
+    if (!timeValue || !/^\d{2}:\d{2}$/.test(timeValue)) {
+        return null;
+    }
+
+    const [hours, minutes] = timeValue.split(':').map(Number);
+    if (!Number.isInteger(hours) || !Number.isInteger(minutes)) {
+        return null;
+    }
+
+    return (hours * 60) + minutes;
+}
+
+/**
+ * Convert 12-hour time input + AM/PM selector to 24-hour HH:mm
+ */
+function getSelectedExamTime24h() {
+    const rawTime = document.getElementById('examTime').value;
+    const meridiem = elements.examMeridiem?.value || 'AM';
+
+    if (!rawTime || !/^\d{2}:\d{2}$/.test(rawTime)) {
+        return '';
+    }
+
+    let [hours, minutes] = rawTime.split(':').map(Number);
+
+    // Enforce 12-hour style input when AM/PM selector is used
+    if (hours < 1 || hours > 12) {
+        return '';
+    }
+
+    if (meridiem === 'AM') {
+        hours = (hours === 12) ? 0 : hours;
+    } else {
+        hours = (hours === 12) ? 12 : hours + 12;
+    }
+
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+/**
+ * Map exact time to exam time slot
+ */
+function mapTimeToSlot(timeValue) {
+    const totalMinutes = toMinutes(timeValue);
+    if (totalMinutes === null) {
+        return null;
+    }
+
+    if (totalMinutes >= 9 * 60 && totalMinutes < 11 * 60) {
+        return '9AM-11AM';
+    }
+
+    if (totalMinutes >= 11 * 60 && totalMinutes < 13 * 60) {
+        return '11AM-1PM';
+    }
+
+    if (totalMinutes >= 13 * 60 && totalMinutes < 16 * 60) {
+        return '1PM-4PM';
+    }
+
+    if (totalMinutes >= 16 * 60 && totalMinutes <= 18 * 60) {
+        return '4PM-6PM';
+    }
+
+    return null;
+}
+
+/**
+ * Update slot hint label
+ */
+function updateExamTimeSlotHint(slot) {
+    if (!elements.examTimeSlotHint) {
+        return;
+    }
+
+    elements.examTimeSlotHint.textContent = slot ? `Auto slot: ${slot}` : 'Auto slot: outside exam windows';
+}
+
+/**
+ * Validate exact exam time
+ */
+function validateExamTime(value, fieldId) {
+    // Always use AM/PM-converted time from current form state
+    const effectiveTime = getSelectedExamTime24h();
+    const slot = mapTimeToSlot(effectiveTime);
+    updateExamTimeSlotHint(slot);
+
+    if (!slot) {
+        showFieldError(fieldId, 'Enter time in 12-hour format (01:00-12:59) and choose AM/PM within exam windows');
+        return false;
+    }
+
+    clearFieldError(fieldId);
+    return true;
+}
+
+/**
+ * Handle exam time input events
+ */
+function handleExamTimeInput(event) {
+    const effectiveTime = getSelectedExamTime24h();
+    validateExamTime(effectiveTime, 'examTime');
+}
+
+/**
+ * Validate date
+ */
+function validateDate(value, fieldId) {
+    if (!value) return false;
+
+    const today = getTodayLocalDateString();
+
+    // Compare YYYY-MM-DD strings to avoid timezone/UTC conversion issues
+    if (value > today) {
+        showFieldError(fieldId, 'Date cannot be in the future');
+        return false;
     }
     
-    return isValid;
+    clearFieldError(fieldId);
+    return true;
+}
+
+/**
+ * Validate number
+ */
+function validateNumber(value, fieldId) {
+    if (!value) return true; // Optional fields
+    
+    const num = parseInt(value);
+    if (isNaN(num) || num < 0) {
+        showFieldError(fieldId, 'Please enter a valid non-negative number');
+        return false;
+    }
+    
+    clearFieldError(fieldId);
+    return true;
+}
+
+/**
+ * Validate files
+ */
+function validateFiles() {
+    const files = elements.attendanceImage.files;
+
+    // In edit mode, allow submission without new uploads if existing images are already present
+    if (isEditMode && (!files || files.length === 0) && existingImageUrls) {
+        clearFieldError('attendanceImage');
+        return true;
+    }
+    
+    if (!files || files.length === 0) {
+        showFieldError('attendanceImage', 'Please select at least one attendance sheet image');
+        return false;
+    }
+    
+    for (let file of files) {
+        if (!file.type.startsWith('image/')) {
+            showFieldError('attendanceImage', 'Only image files are allowed');
+            return false;
+        }
+        
+        if (file.size > CONFIG.MAX_IMAGE_SIZE_MB * 1024 * 1024) {
+            showFieldError('attendanceImage', `File size must be less than ${CONFIG.MAX_IMAGE_SIZE_MB}MB`);
+            return false;
+        }
+    }
+    
+    clearFieldError('attendanceImage');
+    return true;
 }
 
 /**
@@ -194,8 +491,15 @@ function validateForm() {
  */
 function showFieldError(fieldId, message) {
     const errorElement = document.getElementById(`${fieldId}Error`);
+    const field = document.getElementById(fieldId);
+    
     if (errorElement) {
         errorElement.textContent = message;
+        errorElement.style.display = 'block';
+    }
+    
+    if (field) {
+        field.classList.add('error');
     }
 }
 
@@ -204,93 +508,189 @@ function showFieldError(fieldId, message) {
  */
 function clearFieldError(fieldId) {
     const errorElement = document.getElementById(`${fieldId}Error`);
+    const field = document.getElementById(fieldId);
+    
     if (errorElement) {
         errorElement.textContent = '';
+        errorElement.style.display = 'none';
+    }
+    
+    if (field) {
+        field.classList.remove('error');
     }
 }
 
+/**
+ * Validate entire form
+ */
+function validateForm() {
+    let isValid = true;
+    
+    // Required fields
+    const requiredFields = [
+        'examDate', 'examTime', 'facultyInvigilator1', 'facultyInvigilator2',
+        'blankCopiesReceived', 'copiesUsed', 'cancelledCopies', 'copiesReturned',
+        'roomNumber', 'class1', 'subjectClass1', 'studentsClass1'
+    ];
+    
+    requiredFields.forEach(fieldId => {
+        const field = document.getElementById(fieldId);
+        if (field && !validateField(field)) {
+            isValid = false;
+        }
+    });
+    
+    // Validate files
+    if (!validateFiles()) {
+        isValid = false;
+    }
+    
+    return isValid;
+}
+
 // ========================================
-// FILE HANDLING & IMAGE COMPRESSION
+// FILE HANDLING
 // ========================================
 
 /**
  * Handle file selection
  */
 async function handleFileSelect(event) {
-    const files = Array.from(event.target.files || []);
+    const files = event.target.files;
     
-    if (!files.length) {
+    if (!files || files.length === 0) {
         elements.fileNameDisplay.textContent = 'No file chosen';
+        elements.imagePreview.innerHTML = '';
         elements.imagePreview.classList.add('hidden');
+
+        if (isEditMode && existingImageUrls) {
+            renderExistingImagePreview(existingImageUrls);
+        }
         return;
     }
 
-    for (const file of files) {
-        // Validate file type
-        if (!file.type.startsWith('image/')) {
-            showAlert('Please select valid image files only', 'error');
-            elements.attendanceImage.value = '';
-            elements.fileNameDisplay.textContent = 'No file chosen';
-            elements.imagePreview.classList.add('hidden');
-            return;
-        }
-
-        // Validate file size (before compression)
-        const fileSizeMB = file.size / (1024 * 1024);
-        if (fileSizeMB > CONFIG.MAX_IMAGE_SIZE_MB * 2) {
-            showAlert(`Image ${file.name} is too large (${fileSizeMB.toFixed(2)}MB). Maximum size is ${CONFIG.MAX_IMAGE_SIZE_MB * 2}MB`, 'error');
-            elements.attendanceImage.value = '';
-            elements.fileNameDisplay.textContent = 'No file chosen';
-            elements.imagePreview.classList.add('hidden');
-            return;
-        }
-    }
-
-    elements.fileNameDisplay.textContent = files.length === 1
-        ? files[0].name
-        : `${files.length} files selected`;
+    // New file(s) selected: hide old-image preview since update will use new uploads
+    elements.existingImagePreview.innerHTML = '';
+    elements.existingImagePreview.classList.add('hidden');
     
-    // Show preview
-    try {
-        const previewUrls = await Promise.all(
-            files.slice(0, 3).map(file => new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result);
-                reader.onerror = () => reject(new Error('Failed to preview image'));
-                reader.readAsDataURL(file);
-            }))
-        );
-
-        const remainingCount = files.length - previewUrls.length;
-        const previewImages = previewUrls
-            .map(url => `<img src="${url}" alt="Attendance Sheet Preview">`)
-            .join('');
-        const extraInfo = remainingCount > 0
-            ? `<p style="margin-top: 8px; font-size: 0.875rem; color: var(--text-secondary);">+${remainingCount} more image(s)</p>`
-            : '';
-
-        elements.imagePreview.innerHTML = `${previewImages}${extraInfo}`;
-        elements.imagePreview.classList.remove('hidden');
-    } catch (error) {
-        console.error('Error previewing image:', error);
+    // Update file name display
+    if (files.length === 1) {
+        elements.fileNameDisplay.textContent = files[0].name;
+    } else {
+        elements.fileNameDisplay.textContent = `${files.length} files selected`;
     }
+    
+    // Show image previews
+    elements.imagePreview.innerHTML = '';
+    elements.imagePreview.classList.remove('hidden');
+    
+    for (let file of files) {
+        if (file.type.startsWith('image/')) {
+            const preview = await createImagePreview(file);
+            elements.imagePreview.appendChild(preview);
+        }
+    }
+    
+    validateFiles();
 }
 
 /**
- * Compress image before upload
+ * Create image preview
+ */
+function createImagePreview(file) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+            const previewDiv = document.createElement('div');
+            previewDiv.className = 'preview-item';
+            
+            const img = document.createElement('img');
+            img.src = e.target.result;
+            img.alt = file.name;
+            
+            const name = document.createElement('span');
+            name.textContent = file.name;
+            name.className = 'preview-name';
+            
+            previewDiv.appendChild(img);
+            previewDiv.appendChild(name);
+            
+            resolve(previewDiv);
+        };
+        
+        reader.readAsDataURL(file);
+    });
+}
+
+/**
+ * Render existing images fetched from sheet for edit mode
+ */
+function renderExistingImagePreview(imageUrlsString) {
+    if (!elements.existingImagePreview) {
+        return;
+    }
+
+    const urls = String(imageUrlsString || '')
+        .split(',')
+        .map(url => url.trim())
+        .filter(Boolean);
+
+    if (urls.length === 0) {
+        elements.existingImagePreview.innerHTML = '';
+        elements.existingImagePreview.classList.add('hidden');
+        return;
+    }
+
+    const title = document.createElement('div');
+    title.className = 'existing-image-title';
+    title.textContent = 'Existing attendance images (kept if you do not upload new files):';
+
+    const grid = document.createElement('div');
+    grid.className = 'existing-image-grid';
+
+    urls.forEach((url, index) => {
+        const item = document.createElement('div');
+        item.className = 'existing-image-item';
+
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = `Existing attendance image ${index + 1}`;
+        img.loading = 'lazy';
+
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = `Open image ${index + 1}`;
+
+        item.appendChild(img);
+        item.appendChild(link);
+        grid.appendChild(item);
+    });
+
+    elements.existingImagePreview.innerHTML = '';
+    elements.existingImagePreview.appendChild(title);
+    elements.existingImagePreview.appendChild(grid);
+    elements.existingImagePreview.classList.remove('hidden');
+}
+
+/**
+ * Compress image
  */
 async function compressImage(file) {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         const reader = new FileReader();
         
         reader.onload = (e) => {
             const img = new Image();
             
             img.onload = () => {
-                // Calculate new dimensions
+                const canvas = document.createElement('canvas');
                 let width = img.width;
                 let height = img.height;
                 
+                // Calculate new dimensions
                 if (width > CONFIG.MAX_IMAGE_DIMENSION || height > CONFIG.MAX_IMAGE_DIMENSION) {
                     if (width > height) {
                         height = (height / width) * CONFIG.MAX_IMAGE_DIMENSION;
@@ -301,8 +701,6 @@ async function compressImage(file) {
                     }
                 }
                 
-                // Create canvas and compress
-                const canvas = document.createElement('canvas');
                 canvas.width = width;
                 canvas.height = height;
                 
@@ -310,24 +708,15 @@ async function compressImage(file) {
                 ctx.drawImage(img, 0, 0, width, height);
                 
                 canvas.toBlob(
-                    (blob) => {
-                        resolve({
-                            blob,
-                            originalSize: file.size,
-                            compressedSize: blob.size,
-                            fileName: file.name
-                        });
-                    },
+                    (blob) => resolve(blob),
                     'image/jpeg',
                     CONFIG.IMAGE_QUALITY
                 );
             };
             
-            img.onerror = () => reject(new Error('Failed to load image'));
             img.src = e.target.result;
         };
         
-        reader.onerror = () => reject(new Error('Failed to read file'));
         reader.readAsDataURL(file);
     });
 }
@@ -342,118 +731,190 @@ async function compressImage(file) {
 async function handleFormSubmit(event) {
     event.preventDefault();
     
-    // Validate form
     if (!validateForm()) {
-        showAlert('Please correct the errors in the form', 'error');
+        showAlert('Please fix the errors in the form', 'error');
         return;
     }
     
-    // Disable submit button
-    elements.submitBtn.disabled = true;
-    elements.submitBtn.textContent = 'Submitting...';
+    const isUpdating = Boolean(document.getElementById('recordId').value);
+    const loadingMsg = isUpdating ? 'Updating report...' : 'Submitting report...';
+    showLoading(true, loadingMsg);
     
     try {
-        showLoading(true);
-        
         // Prepare form data
         const formData = new FormData();
         
-        // Add text fields
-        formData.append('exam_code', document.getElementById('examCode').value.trim());
-        formData.append('exam_date', document.getElementById('examDate').value);
-        formData.append('session', document.getElementById('session').value);
-        formData.append('room_number', document.getElementById('roomNumber').value.trim());
-        formData.append('students_present', parseInt(document.getElementById('studentsPresent').value));
-        formData.append('main_sheets', parseInt(document.getElementById('mainSheets').value));
-        formData.append('supplementary_sheets', parseInt(document.getElementById('supplementarySheets').value));
-        
-        // Handle image(s)
-        if (elements.attendanceImage.files.length > 0) {
-            const imageFiles = Array.from(elements.attendanceImage.files);
+        const normalizeText = (value, fallback = '') => {
+            const normalized = String(value ?? '').trim();
+            return normalized || fallback;
+        };
 
-            showAlert(
-                imageFiles.length === 1
-                    ? 'Compressing image...'
-                    : `Compressing ${imageFiles.length} images...`,
-                'warning'
-            );
-
-            for (const imageFile of imageFiles) {
-                const compressed = await compressImage(imageFile);
-                formData.append('attendance_image', compressed.blob, compressed.fileName);
-
-                console.log(`Image compressed (${imageFile.name}): ${(compressed.originalSize / 1024).toFixed(2)}KB → ${(compressed.compressedSize / 1024).toFixed(2)}KB`);
+        const normalizeNumber = (value, fallback = '0') => {
+            const normalized = String(value ?? '').trim();
+            if (!normalized) {
+                return fallback;
             }
-        } else if (isEditMode && elements.existingImageUrl.value) {
-            formData.append('existing_image_url', elements.existingImageUrl.value);
+
+            const asNumber = Number(normalized);
+            return Number.isFinite(asNumber) ? String(asNumber) : fallback;
+        };
+
+        const selectedTimeValue = getSelectedExamTime24h();
+        const mappedTimeSlot = mapTimeToSlot(selectedTimeValue);
+        if (!mappedTimeSlot) {
+            showFieldError('examTime', 'Enter time in 12-hour format (01:00-12:59) and choose AM/PM within exam windows');
+            throw new Error('Invalid exam time selected');
+        }
+
+        // Add all form fields
+        formData.append('user_email', currentUser.email);
+        formData.append('exam_date', normalizeText(document.getElementById('examDate').value));
+        formData.append('exam_time', mappedTimeSlot);
+        formData.append('faculty_invigilator1', normalizeText(document.getElementById('facultyInvigilator1').value));
+        formData.append('faculty_invigilator2', normalizeText(document.getElementById('facultyInvigilator2').value));
+        formData.append('faculty_invigilator3', normalizeText(document.getElementById('facultyInvigilator3').value));
+        formData.append('blank_copies_received', normalizeNumber(document.getElementById('blankCopiesReceived').value));
+        formData.append('copies_used', normalizeNumber(document.getElementById('copiesUsed').value));
+        formData.append('cancelled_copies', normalizeNumber(document.getElementById('cancelledCopies').value));
+        formData.append('copies_returned', normalizeNumber(document.getElementById('copiesReturned').value));
+        formData.append('room_number', normalizeText(document.getElementById('roomNumber').value));
+        
+        // Class 1
+        formData.append('class1', normalizeText(document.getElementById('class1').value));
+        formData.append('subject_class1', normalizeText(document.getElementById('subjectClass1').value));
+        formData.append('students_class1', normalizeNumber(document.getElementById('studentsClass1').value));
+        
+        // Class 2 (optional)
+        formData.append('class2', normalizeText(document.getElementById('class2').value));
+        formData.append('subject_class2', normalizeText(document.getElementById('subjectClass2').value));
+        formData.append('students_class2', normalizeNumber(document.getElementById('studentsClass2').value));
+        
+        // Class 3 (optional)
+        formData.append('class3', normalizeText(document.getElementById('class3').value));
+        formData.append('subject_class3', normalizeText(document.getElementById('subjectClass3').value));
+        formData.append('students_class3', normalizeNumber(document.getElementById('studentsClass3').value));
+        
+        // Remarks
+        formData.append('remarks', normalizeText(document.getElementById('remarks').value));
+        
+        // Determine if edit mode
+        const recordId = document.getElementById('recordId').value;
+        if (recordId) {
+            formData.append('record_id', recordId);
         }
         
-        // Add record_id if in edit mode
-        if (isEditMode && currentRecordId) {
-            formData.append('record_id', currentRecordId);
+        // Add images
+        const files = elements.attendanceImage.files;
+        for (let file of files) {
+            const compressedBlob = await compressImage(file);
+            formData.append('attendance_images', compressedBlob, file.name);
+        }
+
+        // Keep previous images when updating without uploading new files
+        if (recordId && files.length === 0 && existingImageUrls) {
+            formData.append('existing_image_urls', existingImageUrls);
         }
         
         // Submit to backend
-        const response = await submitWithRetry(formData, isEditMode);
+        const endpoint = isUpdating ? '/update-report' : '/submit-report';
+        const response = await submitToBackend(endpoint, formData);
         
         if (response.success) {
-            showAlert(
-                isEditMode 
-                    ? 'Report updated successfully!' 
-                    : 'Report submitted successfully!',
-                'success'
+            lastSubmittedRecordId = response.data.record_id;
+            showAlert(response.message, 'success');
+            
+            // Store the time slot for this user
+            const timeSlot = mappedTimeSlot;
+            localStorage.setItem('userTimeSlot', timeSlot);
+            userTimeSlot = timeSlot;
+
+            if (!isUpdating) {
+                resetForm();
+            }
+
+            showPostSubmitActions(
+                isUpdating
+                    ? '✓ Report updated successfully!'
+                    : '✓ Report submitted successfully!'
             );
-            resetForm();
         } else {
-            throw new Error(response.message || 'Submission failed');
+            showAlert(response.message || 'Failed to submit report', 'error');
         }
-        
     } catch (error) {
-        console.error('Submission error:', error);
-        showAlert(error.message || 'Failed to submit report. Please try again.', 'error');
+        console.error('Form submission error:', error);
+        const message = (error && error.message)
+            ? error.message
+            : 'An error occurred while submitting the form. Please try again.';
+        showAlert(message, 'error');
     } finally {
         showLoading(false);
-        elements.submitBtn.disabled = false;
-        elements.submitBtn.textContent = 'Submit Report';
     }
 }
 
 /**
- * Submit form with retry logic
+ * Submit to backend
  */
-async function submitWithRetry(formData, isUpdate = false) {
-    const endpoint = isUpdate ? '/update-report' : '/submit-report';
-    const baseUrls = getApiBaseUrls();
+async function submitToBackend(endpoint, formData) {
+    const urls = getApiBaseUrls();
     let lastError = null;
     
-    for (let attempt = 1; attempt <= CONFIG.RETRY_ATTEMPTS; attempt++) {
-        for (const baseUrl of baseUrls) {
+    for (const baseUrl of urls) {
+        for (let attempt = 1; attempt <= CONFIG.RETRY_ATTEMPTS; attempt++) {
             try {
                 const response = await fetch(`${baseUrl}${endpoint}`, {
                     method: 'POST',
                     body: formData
                 });
                 
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                if (response.ok) {
+                    return await response.json();
                 }
-                
-                return await response.json();
-                
+
+                let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                try {
+                    const errorPayload = await response.json();
+                    if (errorPayload?.message) {
+                        errorMessage = errorPayload.message;
+                    } else if (Array.isArray(errorPayload?.detail) && errorPayload.detail.length > 0) {
+                        const detailText = errorPayload.detail
+                            .map(item => {
+                                const path = Array.isArray(item?.loc) ? item.loc.join('.') : 'field';
+                                const message = item?.msg || 'Invalid value';
+                                return `${path}: ${message}`;
+                            })
+                            .join('; ');
+                        if (detailText) {
+                            errorMessage = detailText;
+                        }
+                    }
+                } catch {
+                    // Ignore JSON parse failures and use default HTTP error message
+                }
+
+                // Backend responded but with an application error; don't fail over to other base URLs.
+                throw new Error(errorMessage);
             } catch (error) {
                 lastError = error;
-                console.error(`Attempt ${attempt} failed on ${baseUrl}:`, error);
+
+                const isNetworkFailure = error instanceof TypeError;
+
+                if (isNetworkFailure) {
+                    console.warn(`Attempt ${attempt} failed for ${baseUrl}:`, error);
+                }
+
+                // If we got a backend response error, surface it immediately.
+                if (!isNetworkFailure) {
+                    throw error;
+                }
+                
+                if (attempt < CONFIG.RETRY_ATTEMPTS) {
+                    await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY_DELAY_MS));
+                }
             }
         }
-
-        if (attempt < CONFIG.RETRY_ATTEMPTS) {
-            // Wait before retry
-            await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY_DELAY_MS * attempt));
-        }
     }
-
-    throw lastError || new Error(`Request failed on all API endpoints: ${baseUrls.join(', ')}`);
+    
+    throw lastError || new Error('All API endpoints failed');
 }
 
 // ========================================
@@ -461,89 +922,31 @@ async function submitWithRetry(formData, isUpdate = false) {
 // ========================================
 
 /**
- * Open edit modal
+ * Load last submission for edit
  */
-function openEditModal() {
-    elements.editModal.classList.remove('hidden');
-}
-
-/**
- * Close edit modal
- */
-function closeEditModal() {
-    elements.editModal.classList.add('hidden');
-    // Clear modal fields
-    document.getElementById('editExamCode').value = '';
-    document.getElementById('editExamDate').value = '';
-    document.getElementById('editSession').value = '';
-    document.getElementById('editRoomNumber').value = '';
-}
-
-/**
- * Fetch report for editing
- */
-async function fetchReportForEdit() {
-    const examCode = document.getElementById('editExamCode').value.trim();
-    const examDate = document.getElementById('editExamDate').value;
-    const session = document.getElementById('editSession').value;
-    const roomNumber = document.getElementById('editRoomNumber').value.trim();
-    
-    if (!examCode || !examDate || !session || !roomNumber) {
-        showAlert('Please fill in all fields to fetch the report', 'error');
+async function loadLastSubmissionForEdit() {
+    if (!lastSubmittedRecordId) {
+        showAlert('No recent submission found to edit', 'error');
         return;
     }
     
+    showLoading(true, 'Loading your submission...');
+    
     try {
-        showLoading(true);
-        
-        const params = new URLSearchParams({
-            exam_code: examCode,
-            exam_date: examDate,
-            session: session,
-            room_number: roomNumber
-        });
-        
-        const baseUrls = getApiBaseUrls();
-        let response = null;
-        let lastError = null;
-
-        for (const baseUrl of baseUrls) {
-            try {
-                response = await fetch(`${baseUrl}/get-report?${params}`);
-                if (response.ok || response.status === 404) {
-                    break;
-                }
-                throw new Error(`HTTP ${response.status}`);
-            } catch (error) {
-                lastError = error;
-                response = null;
-            }
-        }
-
-        if (!response) {
-            throw lastError || new Error('Failed to connect to backend');
-        }
-
-        if (!response.ok) {
-            if (response.status === 404) {
-                throw new Error('No report found with the provided details');
-            }
-            throw new Error(`HTTP ${response.status}`);
-        }
-        
+        const response = await fetch(`${CONFIG.API_BASE_URL}/get-report?record_id=${lastSubmittedRecordId}`);
         const data = await response.json();
         
         if (data.success && data.data) {
             populateFormForEdit(data.data);
-            closeEditModal();
-            showAlert('Report loaded successfully. You can now edit it.', 'success');
+            elements.successBox.classList.add('hidden');
+            elements.form.classList.remove('hidden');
+            showAlert('You can now edit your submission', 'info');
         } else {
-            throw new Error(data.message || 'Failed to fetch report');
+            showAlert('Failed to load report for editing', 'error');
         }
-        
     } catch (error) {
-        console.error('Fetch error:', error);
-        showAlert(error.message || 'Failed to fetch report', 'error');
+        console.error('Failed to load report:', error);
+        showAlert('An error occurred while loading the report', 'error');
     } finally {
         showLoading(false);
     }
@@ -553,54 +956,63 @@ async function fetchReportForEdit() {
  * Populate form with existing data
  */
 function populateFormForEdit(data) {
-    isEditMode = true;
-    currentRecordId = data.record_id;
-    
-    elements.formTitle.textContent = 'Edit Existing Report';
-    elements.submitBtn.textContent = 'Update Report';
-    
-    document.getElementById('examCode').value = data.exam_code;
-    document.getElementById('examDate').value = data.exam_date;
-    document.getElementById('session').value = data.session;
-    document.getElementById('roomNumber').value = data.room_number;
-    document.getElementById('studentsPresent').value = data.students_present;
-    document.getElementById('mainSheets').value = data.main_sheets;
-    document.getElementById('supplementarySheets').value = data.supplementary_sheets;
-    
-    elements.recordIdField.value = data.record_id;
-    elements.existingImageUrl.value = data.attendance_image_url || '';
-    
-    // Make unique fields readonly
-    document.getElementById('examCode').readOnly = true;
-    document.getElementById('examDate').readOnly = true;
-    document.getElementById('session').disabled = true;
-    document.getElementById('roomNumber').readOnly = true;
-    
-    // Image is optional in edit mode
-    elements.attendanceImage.removeAttribute('required');
-    
-    // Show existing image if available
-    const imageUrls = Array.isArray(data.attendance_image_urls) && data.attendance_image_urls.length
-        ? data.attendance_image_urls
-        : (data.attendance_image_url ? [data.attendance_image_url] : []);
-
-    if (imageUrls.length) {
-        const imageLinks = imageUrls
-            .map((url, index) => `<li><a href="${url}" target="_blank">View Attendance Sheet ${index + 1}</a></li>`)
-            .join('');
-
-        elements.imagePreview.innerHTML = `
-            <p><strong>Current Image(s):</strong></p>
-            <ul style="padding-left: 20px; margin: 6px 0;">${imageLinks}</ul>
-            <p style="margin-top: 8px; font-size: 0.875rem; color: var(--text-secondary);">
-                Upload new image(s) to replace existing ones (optional)
-            </p>
-        `;
-        elements.imagePreview.classList.remove('hidden');
+    document.getElementById('examDate').value = toDateInputValue(data.exam_date);
+    const slotDefaults = slotToDefaultTime(data.exam_time);
+    document.getElementById('examTime').value = slotDefaults.time;
+    if (elements.examMeridiem) {
+        elements.examMeridiem.value = slotDefaults.meridiem;
     }
+    updateExamTimeSlotHint(data.exam_time || null);
+    document.getElementById('facultyInvigilator1').value = data.faculty_invigilator1 || '';
+    document.getElementById('facultyInvigilator2').value = data.faculty_invigilator2 || '';
+    document.getElementById('facultyInvigilator3').value = data.faculty_invigilator3 || '';
+    document.getElementById('blankCopiesReceived').value = data.blank_copies_received || '';
+    document.getElementById('copiesUsed').value = data.copies_used || '';
+    document.getElementById('cancelledCopies').value = data.cancelled_copies || '0';
+    document.getElementById('copiesReturned').value = data.copies_returned || '';
+    document.getElementById('roomNumber').value = data.room_number || '';
     
-    // Scroll to form
-    elements.form.scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('class1').value = data.class1 || '';
+    document.getElementById('subjectClass1').value = data.subject_class1 || '';
+    document.getElementById('studentsClass1').value = data.students_class1 || '';
+    
+    document.getElementById('class2').value = data.class2 || '';
+    document.getElementById('subjectClass2').value = data.subject_class2 || '';
+    document.getElementById('studentsClass2').value = data.students_class2 || '';
+    
+    document.getElementById('class3').value = data.class3 || '';
+    document.getElementById('subjectClass3').value = data.subject_class3 || '';
+    document.getElementById('studentsClass3').value = data.students_class3 || '';
+    
+    document.getElementById('remarks').value = data.remarks || '';
+    document.getElementById('recordId').value = data.record_id || '';
+    if (Array.isArray(data.attendance_image_urls)) {
+        existingImageUrls = data.attendance_image_urls.join(', ');
+    } else if (typeof data.attendance_image_urls === 'string') {
+        existingImageUrls = data.attendance_image_urls;
+    } else if (typeof data.attendance_images === 'string') {
+        // Backward compatibility for older payload key names
+        existingImageUrls = data.attendance_images;
+    } else {
+        existingImageUrls = '';
+    }
+
+    renderExistingImagePreview(existingImageUrls);
+    
+    elements.formTitle.textContent = 'Edit Report';
+    elements.submitBtn.textContent = 'Update Report';
+    elements.attendanceImage.required = false;
+    isEditMode = true;
+}
+
+/**
+ * Show form for a brand new response
+ */
+function showNewResponseForm() {
+    resetForm();
+    elements.successBox.classList.add('hidden');
+    elements.form.classList.remove('hidden');
+    showAlert('You can submit a new response now', 'info');
 }
 
 // ========================================
@@ -613,30 +1025,36 @@ function populateFormForEdit(data) {
 function resetForm() {
     elements.form.reset();
     isEditMode = false;
-    currentRecordId = null;
     
-    elements.formTitle.textContent = 'Submit New Report';
+    elements.formTitle.textContent = 'Submit Exam Report';
     elements.submitBtn.textContent = 'Submit Report';
     
     elements.fileNameDisplay.textContent = 'No file chosen';
     elements.imagePreview.classList.add('hidden');
     elements.imagePreview.innerHTML = '';
+    elements.existingImagePreview.classList.add('hidden');
+    elements.existingImagePreview.innerHTML = '';
+    elements.attendanceImage.required = true;
+    if (elements.examMeridiem) {
+        elements.examMeridiem.value = 'AM';
+    }
+    updateExamTimeSlotHint(null);
     
-    elements.recordIdField.value = '';
-    elements.existingImageUrl.value = '';
-    
-    // Re-enable unique fields
-    document.getElementById('examCode').readOnly = false;
-    document.getElementById('examDate').readOnly = false;
-    document.getElementById('session').disabled = false;
-    document.getElementById('roomNumber').readOnly = false;
-    
-    // Make image required again
-    elements.attendanceImage.setAttribute('required', 'required');
+    elements.recordId.value = '';
+    elements.successBox.classList.add('hidden');
+    existingImageUrls = '';
     
     // Clear all error messages
     const errorElements = document.querySelectorAll('.error-message');
-    errorElements.forEach(el => el.textContent = '');
+    errorElements.forEach(el => {
+        el.textContent = '';
+        el.style.display = 'none';
+    });
+    
+    const errorFields = document.querySelectorAll('.error');
+    errorFields.forEach(field => {
+        field.classList.remove('error');
+    });
 }
 
 // ========================================
@@ -644,17 +1062,31 @@ function resetForm() {
 // ========================================
 
 /**
+ * Show/hide loading spinner with optional custom message
+ */
+function showLoading(show, message = 'Processing...') {
+    if (show) {
+        if (elements.loadingMessage) {
+            elements.loadingMessage.textContent = message;
+        }
+        elements.loadingSpinner.classList.remove('hidden');
+    } else {
+        elements.loadingSpinner.classList.add('hidden');
+    }
+}
+
+/**
  * Show alert message
  */
-function showAlert(message, type = 'success') {
+function showAlert(message, type = 'info') {
     elements.alertMessage.textContent = message;
-    elements.alertBox.className = `alert ${type}`;
+    elements.alertBox.className = `alert alert-${type}`;
     elements.alertBox.classList.remove('hidden');
     
-    // Auto-hide after 5 seconds for success/warning
-    if (type !== 'error') {
-        setTimeout(closeAlert, 5000);
-    }
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        closeAlert();
+    }, 5000);
 }
 
 /**
@@ -665,14 +1097,40 @@ function closeAlert() {
 }
 
 /**
- * Show/hide loading spinner
+ * Show success box with edit button
  */
-function showLoading(show) {
-    if (show) {
-        elements.loadingSpinner.classList.remove('hidden');
-    } else {
-        elements.loadingSpinner.classList.add('hidden');
+function showSuccessBox() {
+    elements.successBox.classList.remove('hidden');
+}
+
+/**
+ * Best-effort default exact-time for an existing slot during edit prefill
+ */
+function slotToDefaultTime(slot) {
+    switch (slot) {
+        case '9AM-11AM':
+            return { time: '09:00', meridiem: 'AM' };
+        case '11AM-1PM':
+            return { time: '11:00', meridiem: 'AM' };
+        case '1PM-4PM':
+            return { time: '01:00', meridiem: 'PM' };
+        case '4PM-6PM':
+            return { time: '04:00', meridiem: 'PM' };
+        default:
+            return { time: '', meridiem: 'AM' };
     }
+}
+
+/**
+ * Hide form and show post-submit action buttons
+ */
+function showPostSubmitActions(message) {
+    if (elements.successMessage) {
+        elements.successMessage.textContent = message || '✓ Report submitted successfully!';
+    }
+
+    elements.form.classList.add('hidden');
+    showSuccessBox();
 }
 
 // ========================================
@@ -686,3 +1144,9 @@ window.addEventListener('online', () => {
 window.addEventListener('offline', () => {
     showAlert('No internet connection. Please check your network.', 'error');
 });
+
+// Make functions available globally
+window.handleCredentialResponse = handleCredentialResponse;
+window.signOut = signOut;
+window.closeAlert = closeAlert;
+window.resetForm = resetForm;

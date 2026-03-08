@@ -1,95 +1,126 @@
 # Quick Start Guide
 
-## 🚀 5-Minute Setup
+## 🚀 Setup in 6 steps
 
-### 1. Google Setup (2 minutes)
+### 1) Configure Google OAuth (Web client)
 
-```
-1. Create Google Sheet → Copy Spreadsheet ID
-2. Create Drive Folder → Copy Folder ID  
-3. Generate API Key (32+ random characters)
-```
+In Google Cloud Console → OAuth client (Web application), add **Authorized JavaScript origins**:
 
-### 2. Apps Script (1 minute)
+- `http://localhost:5500`
+- `http://127.0.0.1:5500`
 
-```
-1. Extensions > Apps Script
-2. Paste Code.gs content
-3. Update: SPREADSHEET_ID, DRIVE_FOLDER_ID, API_KEY
-4. Deploy > Web App > Anyone access
-5. Copy deployment URL
-```
+Then make sure client ID is set in frontend config:
 
-### 3. Backend (1 minute)
-
-```powershell
-cd backend
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-Copy-Item .env.example .env
-# Edit .env with your URLs and keys
-python -m uvicorn main:app --reload --host 0.0.0.0 --port 8010
-```
-
-### 4. Frontend (30 seconds)
-
-```powershell
-cd frontend
-# Update app.js API_BASE_URL with your backend URL if needed
-python -m http.server 3000
-```
-
-### 5. Test (30 seconds)
-
-```
-1. Open http://localhost:3000
-2. Fill form and submit
-3. Check Google Sheet for new row
-4. Check Drive for image
-```
-
-## ✅ Success Indicators
-
-- ✅ Google Sheet has header row
-- ✅ Backend shows "running" at http://localhost:8010
-- ✅ Frontend loads without errors
-- ✅ Form submission creates Sheet row
-- ✅ Image appears in Drive
-
-## 🔑 Critical Values to Configure
-
-| Location | Variable | Where to Get |
-|----------|----------|--------------|
-| Code.gs | SPREADSHEET_ID | Google Sheet URL |
-| Code.gs | DRIVE_FOLDER_ID | Drive Folder URL |
-| Code.gs | API_KEY | Generate random |
-| .env | GOOGLE_APPS_SCRIPT_URL | Apps Script deployment |
-| .env | GOOGLE_APPS_SCRIPT_API_KEY | Same as Code.gs |
-| app.js | API_BASE_URL | Backend URL |
-
-## 🆘 Quick Fixes
-
-**"Unauthorized"** → API keys don't match  
-**"CORS Error"** → Add frontend URL to CORS_ORIGINS  
-**"Not Found"** → Check Apps Script deployment URL  
-**"Import Error"** → Run `pip install -r requirements.txt`
-
-## 📱 Valid Test Data
-
-```
-Exam Code: CS101
-Exam Date: 2026-02-25
-Session: Morning
-Room Number: A101
-Students Present: 30
-Main Sheets: 30
-Supplementary Sheets: 5
-Images: One or more JPG/PNG files
-```
+- `frontend/index.html` → `data-client_id`
+- `frontend/app.js` → `CONFIG.GOOGLE_CLIENT_ID`
 
 ---
 
-For detailed instructions, see [DEPLOYMENT.md](DEPLOYMENT.md)
+### 2) Configure Google Sheet + Drive
 
+Set these in `google-apps-script/Code.gs`:
+
+- `SPREADSHEET_ID`
+- `DRIVE_FOLDER_ID`
+- `API_KEY`
+
+---
+
+### 3) Deploy Google Apps Script
+
+1. Deploy as **Web app**
+2. Execute as: **Me**
+3. Access: **Anyone**
+4. Copy deployment URL
+
+Set backend values in `backend/.env`:
+
+- `GOOGLE_APPS_SCRIPT_URL=<your-web-app-url>`
+- `GOOGLE_APPS_SCRIPT_API_KEY=<same-api-key-as-Code.gs>`
+
+---
+
+### 4) Start backend
+
+From project root:
+
+```powershell
+cd backend
+pip install -r requirements.txt
+python main.py
 ```
+
+Backend health: `http://localhost:8010/health`
+
+---
+
+### 5) Start frontend
+
+In a new terminal:
+
+```powershell
+cd frontend
+python -m http.server 5500
+```
+
+Open: `http://localhost:5500`
+
+---
+
+### 6) Test the final flow
+
+1. Sign in with Google
+2. Submit report with at least one image
+3. Form hides and success panel shows two actions:
+   - **Edit Response**
+   - **Submit New Response**
+4. Click **Edit Response**, modify values, click **Update Report**
+5. Verify same row is updated in Google Sheet (no duplicate row)
+
+---
+
+## ✅ Expected behavior (latest)
+
+**Time entry:**
+- Enter exact time (e.g., `11:30`) and choose AM/PM
+- System auto-maps to slot (`11AM-1PM`)
+- Real-time validation shows slot or error
+
+**Date validation:**
+- Today's date is allowed (local-time safe validation)
+- Future dates are blocked
+
+**Image handling:**
+- On first submit, image is required
+- On edit submit, image re-upload is optional if existing images already exist
+- Existing images show as preview grid when editing
+
+**Record management:**
+- Only one final row is kept per `(user_email, exam_date, exam_time)`
+- When editing timeslot, record moves to new timeslot sheet automatically
+
+**Theme & UX:**
+- Toggle dark/light theme via header button
+- Larger remarks box for comfortable typing
+- Mobile-friendly responsive layout
+- Loading messages show current operation ("Submitting...", "Updating...")
+
+---
+
+## 🆘 Quick fixes
+
+- **Google 403 origin not allowed**: verify OAuth origins include both localhost and 127.0.0.1
+- **CORS error**: ensure `backend/.env` includes `http://localhost:5500`
+- **`No module named fastapi`**: run `pip install -r backend/requirements.txt`
+- **422 during update**: hard refresh frontend and restart backend after latest updates
+- **"Auto slot: outside exam windows" error**: ensure time is in 12-hour format (01:00-12:59) and AM/PM is selected correctly
+- **Slow update/submit**: redeploy Apps Script with latest optimized `Code.gs`
+- **Theme not persisting**: check browser localStorage is enabled
+
+---
+
+For full details, see:
+
+- [README.md](README.md)
+- [DEPLOYMENT.md](DEPLOYMENT.md)
+- [TESTING.md](TESTING.md)

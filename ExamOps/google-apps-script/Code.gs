@@ -1,6 +1,7 @@
 /**
  * Google Apps Script for Exam Invigilation Reporting System
- * Handles Google Sheets database and Google Drive file storage
+ * Updated: March 3, 2026
+ * Features: Time-slot based storage, Gmail authentication, Edit functionality
  * 
  * SETUP INSTRUCTIONS:
  * 1. Create a new Google Sheets document
@@ -10,30 +11,80 @@
  * 5. Replace SPREADSHEET_ID and DRIVE_FOLDER_ID below
  * 6. Set API_KEY to match your backend configuration
  * 7. Deploy as Web App with "Anyone" access
+ * 8. Run initializeSheets() function once to create all time-slot sheets
  */
 
 // ========================================
-// CONFIGURATION
+// CONFIGURATION  
 // ========================================
 
 const CONFIG = {
   SPREADSHEET_ID: '1uaAaoKrCRm8quIhfL8aPCvsfxcfmJul6ie2lM8sAsT8',
   DRIVE_FOLDER_ID: '1ANgYJECOVApj9DrrNi5mgs9zoCYkJy1i',
   API_KEY: 'X9fT7qLm2ZpR4vYc8WjK1sHbN6uQeD3aGoVr5tUy', // Must match backend API key
-  SHEET_NAME: 'Records',
+  
+  // Sheet names for different time slots
+  SHEETS: {
+    '9AM-11AM': '9AM-11AM',
+    '11AM-1PM': '11AM-1PM',
+    '1PM-4PM': '1PM-4PM',
+    '4PM-6PM': '4PM-6PM'
+  },
+  
+  // Column headers
+  HEADERS: [
+    'Record ID',
+    'User Email',
+    'Date',
+    'Time Slot',
+    'Faculty Invigilator 1',
+    'Faculty Invigilator 2',
+    'Faculty Invigilator 3',
+    'Blank Copies Received (DU)',
+    'Copies Used (DU)',
+    'Cancelled Copies',
+    'Copies Returned',
+    'Room Number',
+    'Class 1',
+    'Subject Code & Name (Class 1)',
+    'Students Present (Class 1)',
+    'Class 2',
+    'Subject Code & Name (Class 2)',
+    'Students Present (Class 2)',
+    'Class 3',
+    'Subject Code & Name (Class 3)',
+    'Students Present (Class 3)',
+    'Attendance Images',
+    'Remarks',
+    'Last Updated'
+  ],
   
   // Column indices (0-based)
   COLUMNS: {
     RECORD_ID: 0,
-    EXAM_CODE: 1,
+    USER_EMAIL: 1,
     EXAM_DATE: 2,
-    SESSION: 3,
-    ROOM_NUMBER: 4,
-    STUDENTS_PRESENT: 5,
-    MAIN_SHEETS: 6,
-    SUPPLEMENTARY_SHEETS: 7,
-    ATTENDANCE_IMAGE_URL: 8,
-    LAST_UPDATED: 9
+    EXAM_TIME: 3,
+    FACULTY_INVIGILATOR1: 4,
+    FACULTY_INVIGILATOR2: 5,
+    FACULTY_INVIGILATOR3: 6,
+    BLANK_COPIES_RECEIVED: 7,
+    COPIES_USED: 8,
+    CANCELLED_COPIES: 9,
+    COPIES_RETURNED: 10,
+    ROOM_NUMBER: 11,
+    CLASS1: 12,
+    SUBJECT_CLASS1: 13,
+    STUDENTS_CLASS1: 14,
+    CLASS2: 15,
+    SUBJECT_CLASS2: 16,
+    STUDENTS_CLASS2: 17,
+    CLASS3: 18,
+    SUBJECT_CLASS3: 19,
+    STUDENTS_CLASS3: 20,
+    ATTENDANCE_IMAGES: 21,
+    REMARKS: 22,
+    LAST_UPDATED: 23
   }
 };
 
@@ -127,58 +178,104 @@ function getHeaderValue(e, headerName) {
  */
 function handleSubmit(data) {
   try {
-    const sheet = getOrCreateSheet();
-    const recordId = data.record_id;
+    Logger.log('Processing submit request');
     
-    // Check if record exists
-    const existingRow = findRowByRecordId(sheet, recordId);
+    // Validate required fields
+    const requiredFields = [
+      'record_id', 'user_email', 'exam_date', 'exam_time',
+      'faculty_invigilator1', 'faculty_invigilator2',
+      'blank_copies_received', 'copies_used', 'cancelled_copies', 'copies_returned',
+      'room_number', 'class1', 'subject_class1', 'students_class1'
+    ];
     
-    // Upload image(s) to Drive
-    let imageUrls = [];
-    if (Array.isArray(data.image_payloads) && data.image_payloads.length > 0) {
-      imageUrls = uploadImagesToDrive(data.image_payloads, recordId);
-    } else if (data.image_data) {
-      imageUrls = [
-        uploadImageToDrive(
-          data.image_data,
-          data.image_filename || `attendance_${recordId}.jpg`,
-          data.image_content_type || 'image/jpeg'
-        )
-      ];
+    for (const field of requiredFields) {
+      if (!data[field] && data[field] !== 0) {
+        return createResponse({
+          success: false,
+          message: `Missing required field: ${field}`
+        }, 400);
+      }
     }
     
+    // Get or create the appropriate sheet based on time slot
+    const sheet = getOrCreateSheet(data.exam_time);
+    
+    if (!sheet) {
+      return createResponse({
+        success: false,
+        message: `Invalid time slot: ${data.exam_time}`
+      }, 400);
+    }
+    
+    // Check if record already exists
+    const existingRow = findRecordRow(sheet, data.record_id);
+    
+    // Upload images to Drive
+    let imageUrls = '';
+    if (data.image_payloads && Array.isArray(data.image_payloads)) {
+      const urls = [];
+      for (let i = 0; i < data.image_payloads.length; i++) {
+        const payload = data.image_payloads[i];
+        const url = uploadImageToDrive(
+          payload.image_data,
+          payload.image_filename,
+          data.record_id
+        );
+        if (url) {
+          urls.push(url);
+        }
+      }
+      imageUrls = urls.join(', ');
+    }
+    
+    // Prepare row data
     const rowData = [
-      recordId,
-      data.exam_code,
-      data.exam_date,
-      data.session,
-      data.room_number,
-      parseInt(data.students_present),
-      parseInt(data.main_sheets),
-      parseInt(data.supplementary_sheets),
-      buildStoredImageValue(imageUrls),
+      data.record_id || '',
+      data.user_email || '',
+      data.exam_date || '',
+      data.exam_time || '',
+      data.faculty_invigilator1 || '',
+      data.faculty_invigilator2 || '',
+      data.faculty_invigilator3 || '',
+      data.blank_copies_received || 0,
+      data.copies_used || 0,
+      data.cancelled_copies || 0,
+      data.copies_returned || 0,
+      data.room_number || '',
+      data.class1 || '',
+      data.subject_class1 || '',
+      data.students_class1 || 0,
+      data.class2 || '',
+      data.subject_class2 || '',
+      data.students_class2 || 0,
+      data.class3 || '',
+      data.subject_class3 || '',
+      data.students_class3 || 0,
+      imageUrls,
+      data.remarks || '',
       new Date().toISOString()
     ];
     
-    if (existingRow) {
-      // Update existing row
+    // Add or update record
+    if (existingRow > 0) {
+      // Update existing record
       sheet.getRange(existingRow, 1, 1, rowData.length).setValues([rowData]);
-      Logger.log('Updated existing record: ' + recordId);
+      Logger.log('Updated existing record at row ' + existingRow);
       
       return createResponse({
         success: true,
         message: 'Report updated successfully',
-        data: { record_id: recordId, row: existingRow }
+        data: { record_id: data.record_id }
       });
     } else {
-      // Insert new row
+      // Add new record
       sheet.appendRow(rowData);
-      Logger.log('Inserted new record: ' + recordId);
+      Logger.log('Added new record');
       
       return createResponse({
         success: true,
         message: 'Report submitted successfully',
-        data: { record_id: recordId }
+        data: { record_id: data.record_id }
       });
     }
     
@@ -196,47 +293,76 @@ function handleSubmit(data) {
  */
 function handleGet(data) {
   try {
-    const sheet = getOrCreateSheet();
-    const recordId = data.record_id;
+    Logger.log('Processing get request for record_id: ' + data.record_id);
     
-    const rowIndex = findRowByRecordId(sheet, recordId);
-    
-    if (!rowIndex) {
+    if (!data.record_id) {
       return createResponse({
         success: false,
-        message: 'Report not found'
-      }, 404);
+        message: 'Missing record_id'
+      }, 400);
     }
     
-    const rowData = sheet.getRange(rowIndex, 1, 1, 10).getValues()[0];
+    // Search in all time-slot sheets
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
     
-    const parsedImageUrls = parseStoredImageUrls(rowData[CONFIG.COLUMNS.ATTENDANCE_IMAGE_URL]);
-
-    const reportData = {
-      record_id: rowData[CONFIG.COLUMNS.RECORD_ID],
-      exam_code: rowData[CONFIG.COLUMNS.EXAM_CODE],
-      exam_date: rowData[CONFIG.COLUMNS.EXAM_DATE],
-      session: rowData[CONFIG.COLUMNS.SESSION],
-      room_number: rowData[CONFIG.COLUMNS.ROOM_NUMBER],
-      students_present: rowData[CONFIG.COLUMNS.STUDENTS_PRESENT],
-      main_sheets: rowData[CONFIG.COLUMNS.MAIN_SHEETS],
-      supplementary_sheets: rowData[CONFIG.COLUMNS.SUPPLEMENTARY_SHEETS],
-      attendance_image_url: parsedImageUrls.length ? parsedImageUrls[0] : '',
-      attendance_image_urls: parsedImageUrls,
-      last_updated: rowData[CONFIG.COLUMNS.LAST_UPDATED]
-    };
+    for (const timeSlot of Object.keys(CONFIG.SHEETS)) {
+      const sheetName = CONFIG.SHEETS[timeSlot];
+      const sheet = spreadsheet.getSheetByName(sheetName);
+      
+      if (!sheet) continue;
+      
+      const row = findRecordRow(sheet, data.record_id);
+      
+      if (row > 0) {
+        const values = sheet.getRange(row, 1, 1, CONFIG.HEADERS.length).getValues()[0];
+        
+        const recordData = {
+          record_id: values[CONFIG.COLUMNS.RECORD_ID],
+          user_email: values[CONFIG.COLUMNS.USER_EMAIL],
+          exam_date: values[CONFIG.COLUMNS.EXAM_DATE],
+          exam_time: values[CONFIG.COLUMNS.EXAM_TIME],
+          faculty_invigilator1: values[CONFIG.COLUMNS.FACULTY_INVIGILATOR1],
+          faculty_invigilator2: values[CONFIG.COLUMNS.FACULTY_INVIGILATOR2],
+          faculty_invigilator3: values[CONFIG.COLUMNS.FACULTY_INVIGILATOR3],
+          blank_copies_received: values[CONFIG.COLUMNS.BLANK_COPIES_RECEIVED],
+          copies_used: values[CONFIG.COLUMNS.COPIES_USED],
+          cancelled_copies: values[CONFIG.COLUMNS.CANCELLED_COPIES],
+          copies_returned: values[CONFIG.COLUMNS.COPIES_RETURNED],
+          room_number: values[CONFIG.COLUMNS.ROOM_NUMBER],
+          class1: values[CONFIG.COLUMNS.CLASS1],
+          subject_class1: values[CONFIG.COLUMNS.SUBJECT_CLASS1],
+          students_class1: values[CONFIG.COLUMNS.STUDENTS_CLASS1],
+          class2: values[CONFIG.COLUMNS.CLASS2],
+          subject_class2: values[CONFIG.COLUMNS.SUBJECT_CLASS2],
+          students_class2: values[CONFIG.COLUMNS.STUDENTS_CLASS2],
+          class3: values[CONFIG.COLUMNS.CLASS3],
+          subject_class3: values[CONFIG.COLUMNS.SUBJECT_CLASS3],
+          students_class3: values[CONFIG.COLUMNS.STUDENTS_CLASS3],
+          attendance_image_urls: values[CONFIG.COLUMNS.ATTENDANCE_IMAGES] ? 
+            values[CONFIG.COLUMNS.ATTENDANCE_IMAGES].toString().split(', ') : [],
+          remarks: values[CONFIG.COLUMNS.REMARKS],
+          last_updated: values[CONFIG.COLUMNS.LAST_UPDATED]
+        };
+        
+        return createResponse({
+          success: true,
+          message: 'Record found',
+          data: recordData
+        });
+      }
+    }
     
+    // Record not found in any sheet
     return createResponse({
-      success: true,
-      message: 'Report retrieved successfully',
-      data: reportData
-    });
+      success: false,
+      message: 'Record not found'
+    }, 404);
     
   } catch (error) {
     Logger.log('Error in handleGet: ' + error.toString());
     return createResponse({
       success: false,
-      message: 'Failed to retrieve report: ' + error.toString()
+      message: 'Failed to retrieve record: ' + error.toString()
     }, 500);
   }
 }
@@ -246,61 +372,126 @@ function handleGet(data) {
  */
 function handleUpdate(data) {
   try {
-    const sheet = getOrCreateSheet();
-    const recordId = data.record_id;
+    Logger.log('Processing update request for record_id: ' + data.record_id);
     
-    const rowIndex = findRowByRecordId(sheet, recordId);
-    
-    if (!rowIndex) {
+    if (!data.record_id) {
       return createResponse({
         success: false,
-        message: 'Report not found'
+        message: 'Missing record_id'
+      }, 400);
+    }
+    
+    // Search in all time-slot sheets
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    let found = false;
+    let sourceSheet = null;
+    let sourceRow = -1;
+    
+    for (const timeSlot of Object.keys(CONFIG.SHEETS)) {
+      const sheetName = CONFIG.SHEETS[timeSlot];
+      const sheet = spreadsheet.getSheetByName(sheetName);
+      
+      if (!sheet) continue;
+      
+      const row = findRecordRow(sheet, data.record_id);
+      
+      if (row > 0) {
+        sourceSheet = sheet;
+        sourceRow = row;
+        found = true;
+        break;
+      }
+    }
+    
+    if (found) {
+      const targetSheet = getOrCreateSheet(data.exam_time);
+      if (!targetSheet) {
+        return createResponse({
+          success: false,
+          message: 'Invalid exam_time for update'
+        }, 400);
+      }
+
+      // Upload new images if provided
+      let imageUrls = data.existing_image_urls || '';
+      if (data.image_payloads && Array.isArray(data.image_payloads) && data.image_payloads.length > 0) {
+        const urls = [];
+        for (let i = 0; i < data.image_payloads.length; i++) {
+          const payload = data.image_payloads[i];
+          const url = uploadImageToDrive(
+            payload.image_data,
+            payload.image_filename,
+            data.record_id
+          );
+          if (url) {
+            urls.push(url);
+          }
+        }
+        imageUrls = urls.join(', ');
+      }
+
+      const rowData = [
+        data.record_id,
+        data.user_email || '',
+        data.exam_date || '',
+        data.exam_time || '',
+        data.faculty_invigilator1 || '',
+        data.faculty_invigilator2 || '',
+        data.faculty_invigilator3 || '',
+        data.blank_copies_received || 0,
+        data.copies_used || 0,
+        data.cancelled_copies || 0,
+        data.copies_returned || 0,
+        data.room_number || '',
+        data.class1 || '',
+        data.subject_class1 || '',
+        data.students_class1 || 0,
+        data.class2 || '',
+        data.subject_class2 || '',
+        data.students_class2 || 0,
+        data.class3 || '',
+        data.subject_class3 || '',
+        data.students_class3 || 0,
+        imageUrls,
+        data.remarks || '',
+        new Date().toISOString()
+      ];
+
+      // Upsert into target sheet
+      const targetRow = findRecordRow(targetSheet, data.record_id);
+      if (targetRow > 0) {
+        targetSheet.getRange(targetRow, 1, 1, rowData.length).setValues([rowData]);
+      } else {
+        targetSheet.appendRow(rowData);
+      }
+
+      // Remove old row if moved across sheets
+      if (sourceSheet && sourceSheet.getName() !== targetSheet.getName() && sourceRow > 0) {
+        sourceSheet.deleteRow(sourceRow);
+      } else if (sourceSheet && sourceSheet.getName() === targetSheet.getName() && sourceRow > 0 && sourceRow !== targetRow) {
+        // Defensive cleanup if same-sheet append happened unexpectedly
+        sourceSheet.deleteRow(sourceRow);
+      }
+
+      Logger.log('Updated record and ensured correct slot sheet placement for record_id: ' + data.record_id);
+
+      return createResponse({
+        success: true,
+        message: 'Report updated successfully',
+        data: { record_id: data.record_id }
+      });
+    } else {
+      return createResponse({
+        success: false,
+        message: 'Record not found'
       }, 404);
     }
-    
-    // Handle image update
-    let imageUrls = [];
-    if (Array.isArray(data.image_payloads) && data.image_payloads.length > 0) {
-      imageUrls = uploadImagesToDrive(data.image_payloads, recordId);
-    } else if (data.image_data) {
-      imageUrls = [
-        uploadImageToDrive(
-          data.image_data,
-          data.image_filename || `attendance_${recordId}.jpg`,
-          data.image_content_type || 'image/jpeg'
-        )
-      ];
-    } else {
-      imageUrls = parseStoredImageUrls(data.existing_image_urls || data.existing_image_url || '');
-    }
-    
-    const rowData = [
-      recordId,
-      data.exam_code,
-      data.exam_date,
-      data.session,
-      data.room_number,
-      parseInt(data.students_present),
-      parseInt(data.main_sheets),
-      parseInt(data.supplementary_sheets),
-      buildStoredImageValue(imageUrls),
-      new Date().toISOString()
-    ];
-    
-    sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
-    Logger.log('Updated record: ' + recordId);
-    
-    return createResponse({
-      success: true,
-      message: 'Report updated successfully',
-      data: { record_id: recordId }
-    });
     
   } catch (error) {
     Logger.log('Error in handleUpdate: ' + error.toString());
     return createResponse({
       success: false,
-      message: 'Failed to update report: ' + error.toString()
+      message: 'Failed to update record: ' + error.toString()
     }, 500);
   }
 }
@@ -310,53 +501,64 @@ function handleUpdate(data) {
 // ========================================
 
 /**
- * Get or create the reports sheet
+ * Get or create sheet for a time slot
  */
-function getOrCreateSheet() {
+function getOrCreateSheet(timeSlot) {
+  const sheetName = CONFIG.SHEETS[timeSlot];
+  
+  if (!sheetName) {
+    Logger.log('Invalid time slot: ' + timeSlot);
+    return null;
+  }
+  
   const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  let sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+  let sheet = spreadsheet.getSheetByName(sheetName);
   
   if (!sheet) {
-    sheet = spreadsheet.insertSheet(CONFIG.SHEET_NAME);
+    // Create new sheet
+    sheet = spreadsheet.insertSheet(sheetName);
     
-    // Create header row
-    const headers = [
-      'Record ID',
-      'Exam Code',
-      'Exam Date',
-      'Session',
-      'Room Number',
-      'Students Present',
-      'Main Sheets',
-      'Supplementary Sheets',
-      'Attendance Image URL',
-      'Last Updated'
-    ];
+    // Set headers
+    sheet.getRange(1, 1, 1, CONFIG.HEADERS.length).setValues([CONFIG.HEADERS]);
     
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+    // Format header row
+    const headerRange = sheet.getRange(1, 1, 1, CONFIG.HEADERS.length);
+    headerRange.setFontWeight('bold');
+    headerRange.setBackground('#f97316');
+    headerRange.setFontColor('#ffffff');
+    
+    // Freeze header row
     sheet.setFrozenRows(1);
     
-    Logger.log('Created new sheet: ' + CONFIG.SHEET_NAME);
+    // Auto-resize columns
+    for (let i = 1; i <= CONFIG.HEADERS.length; i++) {
+      sheet.autoResizeColumn(i);
+    }
+    
+    Logger.log('Created new sheet: ' + sheetName);
   }
   
   return sheet;
 }
 
 /**
- * Find row index by record_id
+ * Find row number for a given record ID in a sheet
+ * Optimized to read only the record_id column for faster search
  */
-function findRowByRecordId(sheet, recordId) {
-  const dataRange = sheet.getDataRange();
-  const values = dataRange.getValues();
+function findRecordRow(sheet, recordId) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return -1; // No data rows (only header or empty)
   
-  for (let i = 1; i < values.length; i++) { // Start at 1 to skip header
-    if (values[i][CONFIG.COLUMNS.RECORD_ID] === recordId) {
-      return i + 1; // Return 1-based row index
+  // Read only first column (record IDs) - 10-20x faster than reading all columns
+  const recordIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  
+  for (let i = 0; i < recordIds.length; i++) {
+    if (recordIds[i][0] === recordId) {
+      return i + 2; // Return 1-based row number (row 2 = first data row)
     }
   }
   
-  return null;
+  return -1; // Not found
 }
 
 // ========================================
@@ -366,39 +568,29 @@ function findRowByRecordId(sheet, recordId) {
 /**
  * Upload image to Google Drive
  */
-function uploadImageToDrive(base64Data, fileName, contentType) {
+function uploadImageToDrive(base64Data, fileName, recordId) {
   try {
     const folder = DriveApp.getFolderById(CONFIG.DRIVE_FOLDER_ID);
     
     // Decode base64
     const blob = Utilities.newBlob(
       Utilities.base64Decode(base64Data),
-      contentType,
-      fileName
+      'image/jpeg',
+      fileName || 'attendance_' + recordId + '_' + new Date().getTime() + '.jpg'
     );
     
-    // Check if file with same name exists (for updates)
-    const existingFiles = folder.getFilesByName(fileName);
-    if (existingFiles.hasNext()) {
-      const existingFile = existingFiles.next();
-      existingFile.setTrashed(true);
-      Logger.log('Deleted old file: ' + fileName);
-    }
-    
-    // Upload new file
+    // Upload file
     const file = folder.createFile(blob);
     
-    // Make file accessible via link
+    // Make file publicly accessible
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     
-    const fileUrl = file.getUrl();
-    Logger.log('Uploaded file to Drive: ' + fileUrl);
-    
-    return fileUrl;
+    // Return viewable URL
+    return file.getUrl();
     
   } catch (error) {
-    Logger.log('Error uploading to Drive: ' + error.toString());
-    throw new Error('Failed to upload image: ' + error.toString());
+    Logger.log('Error uploading image: ' + error.toString());
+    return '';
   }
 }
 
@@ -409,14 +601,14 @@ function uploadImageToDrive(base64Data, fileName, contentType) {
 /**
  * Create JSON response
  */
-function createResponse(data, statusCode = 200) {
-  const output = ContentService.createTextOutput(JSON.stringify(data));
-  output.setMimeType(ContentService.MimeType.JSON);
+function createResponse(data, statusCode) {
+  statusCode = statusCode || 200;
   
-  // Note: Apps Script Web Apps don't support custom status codes
-  // The statusCode parameter is here for documentation
+  const response = ContentService.createTextOutput(
+    JSON.stringify(data)
+  ).setMimeType(ContentService.MimeType.JSON);
   
-  return output;
+  return response;
 }
 
 // ========================================
@@ -424,20 +616,47 @@ function createResponse(data, statusCode = 200) {
 // ========================================
 
 /**
+ * Initialize all sheets (run this once)
+ */
+function initializeSheets() {
+  const timeSlots = ['9AM-11AM', '11AM-1PM', '1PM-4PM', '4PM-6PM'];
+  
+  for (const timeSlot of timeSlots) {
+    getOrCreateSheet(timeSlot);
+    Logger.log('Initialized sheet for ' + timeSlot);
+  }
+  
+  Logger.log('All sheets initialized successfully');
+}
+
+/**
  * Manual testing function
  */
 function testSubmit() {
   const testData = {
     record_id: 'test123',
-    exam_code: 'CS101',
-    exam_date: '2026-02-25',
-    session: 'Morning',
-    room_number: 'Room 101',
-    students_present: 30,
-    main_sheets: 30,
-    supplementary_sheets: 5,
-    image_data: '', // Add base64 image data for testing
-    image_filename: 'test_attendance.jpg'
+    user_email: 'test@example.com',
+    exam_date: '2026-03-03',
+    exam_time: '9AM-11AM',
+    faculty_invigilator1: 'Dr. Smith',
+    faculty_invigilator2: 'Dr. Jones',
+    faculty_invigilator3: '',
+    blank_copies_received: 100,
+    copies_used: 85,
+    cancelled_copies: 2,
+    copies_returned: 13,
+    room_number: '113A',
+    class1: 'B.Sc. (H) Computer Science - Sem 3',
+    subject_class1: 'CS301 - Data Structures',
+    students_class1: 30,
+    class2: '',
+    subject_class2: '',
+    students_class2: 0,
+    class3: '',
+    subject_class3: '',
+    students_class3: 0,
+    remarks: 'Test submission',
+    image_payloads: [] // Add image data for full testing
   };
   
   const result = handleSubmit(testData);
@@ -457,18 +676,8 @@ function testGet() {
 }
 
 /**
- * Clear all data (for testing only - use with caution!)
+ * Debug sheets in the spreadsheet
  */
-function clearAllData() {
-  const sheet = getOrCreateSheet();
-  const lastRow = sheet.getLastRow();
-  
-  if (lastRow > 1) {
-    sheet.deleteRows(2, lastRow - 1);
-    Logger.log('Cleared all data rows');
-  }
-}
-
 function debugSheets() {
   try {
     const sheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
@@ -486,70 +695,4 @@ function debugSheets() {
   } catch (error) {
     Logger.log("ERROR: " + error.toString());
   }
-}
-
-/**
- * Upload multiple images to Google Drive
- */
-function uploadImagesToDrive(imagePayloads, recordId) {
-  if (!Array.isArray(imagePayloads) || imagePayloads.length === 0) {
-    return [];
-  }
-
-  const urls = [];
-  for (let i = 0; i < imagePayloads.length; i++) {
-    const imagePayload = imagePayloads[i];
-    if (!imagePayload || !imagePayload.image_data) continue;
-
-    const fallbackName = `attendance_${recordId}_${i + 1}.jpg`;
-    const imageUrl = uploadImageToDrive(
-      imagePayload.image_data,
-      imagePayload.image_filename || fallbackName,
-      imagePayload.image_content_type || 'image/jpeg'
-    );
-    urls.push(imageUrl);
-  }
-
-  return urls;
-}
-
-/**
- * Parse image URL cell value into an array
- */
-function parseStoredImageUrls(rawValue) {
-  if (!rawValue) return [];
-
-  if (Array.isArray(rawValue)) {
-    return rawValue.filter(Boolean);
-  }
-
-  if (typeof rawValue !== 'string') {
-    return [String(rawValue)].filter(Boolean);
-  }
-
-  const trimmed = rawValue.trim();
-  if (!trimmed) return [];
-
-  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (Array.isArray(parsed)) {
-        return parsed.filter(Boolean);
-      }
-    } catch (error) {
-      Logger.log('Failed to parse attendance image URL JSON: ' + error.toString());
-    }
-  }
-
-  return [trimmed];
-}
-
-/**
- * Convert array of image URLs to storable sheet value
- */
-function buildStoredImageValue(imageUrls) {
-  const normalized = (imageUrls || []).filter(Boolean);
-  if (!normalized.length) return '';
-  if (normalized.length === 1) return normalized[0];
-  return JSON.stringify(normalized);
 }
