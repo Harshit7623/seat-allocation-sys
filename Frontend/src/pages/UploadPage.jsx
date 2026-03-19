@@ -6,8 +6,8 @@ import { useSession } from '../contexts/SessionContext';
 import SessionIndicator from '../components/SessionIndicator';
 import { 
   Upload, Loader2, AlertCircle, CheckCircle, FileSpreadsheet, 
-  Database, ArrowRight, Eye, Check, X, Zap, RefreshCw, FileText,
-  Download, Info, ChevronDown, ChevronUp
+  Database, ArrowRight, Eye, Check, X, Zap, FileText,
+  Info, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -35,6 +35,8 @@ const UploadPage = ({ showToast }) => {
   const [commitLoading, setCommitLoading] = useState(false);
   const [error, setError] = useState(null);
   const [pageReady, setPageReady] = useState(false);
+  const [activeTemplateSlide, setActiveTemplateSlide] = useState(0);
+  const [isTemplatePaused, setIsTemplatePaused] = useState(false);
   
   // ✅ FIXED: Use consistent state name
   const [uploadedBatches, setUploadedBatches] = useState([]);
@@ -59,7 +61,7 @@ const UploadPage = ({ showToast }) => {
     };
     
     initPage();
-  }, []);
+  }, [clearCompletedSession, updateSession]);
 
   // ============================================================================
   // CLEAR BATCHES - When no active session or session completed
@@ -91,6 +93,16 @@ const UploadPage = ({ showToast }) => {
       fetchSessionUploads(session.session_id);
     }
   }, [hasActiveSession, session?.session_id, pageReady]);
+
+  useEffect(() => {
+    if (uploadResult || isTemplatePaused) return;
+
+    const intervalId = setInterval(() => {
+      setActiveTemplateSlide((prev) => (prev + 1) % 2);
+    }, 3500);
+
+    return () => clearInterval(intervalId);
+  }, [uploadResult, isTemplatePaused]);
 
   // Re-fetch when user changes (account switch)
   const userIdentity = user?.email || user?.id;
@@ -132,28 +144,6 @@ const UploadPage = ({ showToast }) => {
       }
     } catch (err) {
       console.error('Failed to fetch session uploads:', err);
-    }
-  };
-
-  const downloadTemplate = async (filename) => {
-    try {
-      const response = await fetch(`/api/templates/download/${filename}`);
-      if (!response.ok) {
-        throw new Error(`Failed to download: ${response.statusText}`);
-      }
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      if (showToast) showToast(`✅ Downloaded: ${filename}`, "success");
-    } catch (error) {
-      if (showToast) showToast(`❌ Download failed: ${error.message}`, "error");
-      console.error('Download error:', error);
     }
   };
 
@@ -600,117 +590,7 @@ const UploadPage = ({ showToast }) => {
               </ul>
             </div>
 
-            {/* Template Download Section */}
-            <div className="glass-card p-6 rounded-2xl border-2 border-orange-200 dark:border-orange-800 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20">
-              <div className="flex items-center gap-2 mb-4">
-                <Download className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                <h3 className="text-sm font-bold uppercase tracking-widest text-gray-900 dark:text-white">Download Sample Template</h3>
-              </div>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
-                Not sure about the format? Download a sample CSV template to see the exact structure required.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  onClick={() => downloadTemplate('students_mode1.csv')}
-                  className="flex items-center gap-3 px-4 py-4 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-orange-500 dark:hover:border-orange-400 transition-all group cursor-pointer"
-                >
-                  <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg group-hover:bg-orange-500 transition-colors">
-                    <Download className="w-5 h-5 text-orange-600 dark:text-orange-400 group-hover:text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-bold text-gray-900 dark:text-white group-hover:text-orange-600 dark:group-hover:text-orange-400">
-                      Mode 1 Template
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Enrollment Only
-                    </div>
-                  </div>
-                  <FileSpreadsheet className="w-5 h-5 text-gray-300 dark:text-gray-600" />
-                </button>
-                <button
-                  onClick={() => downloadTemplate('students_mode2.csv')}
-                  className="flex items-center gap-3 px-4 py-4 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-orange-500 dark:hover:border-orange-400 transition-all group cursor-pointer"
-                >
-                  <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg group-hover:bg-orange-500 transition-colors">
-                    <Download className="w-5 h-5 text-orange-600 dark:text-orange-400 group-hover:text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-bold text-gray-900 dark:text-white group-hover:text-orange-600 dark:group-hover:text-orange-400">
-                      Mode 2 Template
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Name + Enrollment + Dept
-                    </div>
-                  </div>
-                  <FileSpreadsheet className="w-5 h-5 text-gray-300 dark:text-gray-600" />
-                </button>
-                <button
-                  onClick={() => downloadTemplate('CSE_Batch_10.csv')}
-                  className="flex items-center gap-3 px-4 py-4 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-orange-500 dark:hover:border-orange-400 transition-all group cursor-pointer"
-                >
-                  <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg group-hover:bg-orange-500 transition-colors">
-                    <Download className="w-5 h-5 text-orange-600 dark:text-orange-400 group-hover:text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-bold text-gray-900 dark:text-white group-hover:text-orange-600 dark:group-hover:text-orange-400">
-                      CSE Batch Example
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      10 Sample Students
-                    </div>
-                  </div>
-                  <FileSpreadsheet className="w-5 h-5 text-gray-300 dark:text-gray-600" />
-                </button>
-              </div>
-              
-              {/* Quick Preview */}
-              <div className="mt-4 p-3 bg-white/70 dark:bg-gray-800/70 rounded-lg border border-gray-200 dark:border-gray-700">
-                <div className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1">
-                  <Eye className="w-3 h-3" />
-                  Mode 2 Template Preview:
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs font-mono">
-                    <thead>
-                      <tr className="border-b border-gray-200 dark:border-gray-700">
-                        <th className="text-left py-1 px-2 text-orange-600 dark:text-orange-400">Name</th>
-                        <th className="text-left py-1 px-2 text-orange-600 dark:text-orange-400">Enrollment</th>
-                        <th className="text-left py-1 px-2 text-orange-600 dark:text-orange-400">Department</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-gray-600 dark:text-gray-400">
-                      <tr><td className="py-1 px-2">Rahul Sharma</td><td className="py-1 px-2">21BCE1001</td><td className="py-1 px-2">Computer Science</td></tr>
-                      <tr><td className="py-1 px-2">Priya Patel</td><td className="py-1 px-2">21BCE1002</td><td className="py-1 px-2">Computer Science</td></tr>
-                      <tr><td className="py-1 px-2 text-gray-400">...</td><td className="py-1 px-2 text-gray-400">...</td><td className="py-1 px-2 text-gray-400">...</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              
-              {/* Accepted Headers Info */}
-              <details className="mt-4 group">
-                <summary className="flex items-center gap-2 cursor-pointer text-xs font-bold text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300">
-                  <Info className="w-3 h-3" />
-                  <span>View All Accepted Column Names</span>
-                  <ChevronDown className="w-3 h-3 group-open:hidden" />
-                  <ChevronUp className="w-3 h-3 hidden group-open:inline" />
-                </summary>
-                <div className="mt-3 p-3 bg-white/50 dark:bg-gray-800/50 rounded-lg text-xs space-y-2">
-                  <div>
-                    <span className="font-bold text-gray-700 dark:text-gray-300">Enrollment:</span>
-                    <span className="text-gray-600 dark:text-gray-400 ml-1">enrollment, enrollmentno, roll, rollno, regno, studentid, id, matricno</span>
-                  </div>
-                  <div>
-                    <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>
-                    <span className="text-gray-600 dark:text-gray-400 ml-1">name, studentname, fullname, candidate, firstname</span>
-                  </div>
-                  <div>
-                    <span className="font-bold text-gray-700 dark:text-gray-300">Department:</span>
-                    <span className="text-gray-600 dark:text-gray-400 ml-1">department, dept, branch, course, program</span>
-                  </div>
-                </div>
-              </details>
-            </div>
+
 
             {/* Mode & Config */}
             <div className="space-y-4">
@@ -777,6 +657,254 @@ const UploadPage = ({ showToast }) => {
               </div>
             </div>
           </div>
+
+          {/* Format Templates Guide - Shows when no upload result yet */}
+          {!uploadResult && (
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.4 }}
+              className="space-y-6 relative"
+            >
+              {/* View Accepted Column Names */}
+              <div className="glass-card p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700">
+                <details className="group">
+                  <summary className="flex items-center gap-2 cursor-pointer text-sm font-bold text-gray-900 dark:text-white hover:text-orange-600 dark:hover:text-orange-400">
+                    <Info className="w-4 h-4" />
+                    <span>View All Accepted Column Names</span>
+                    <ChevronDown className="w-4 h-4 group-open:hidden ml-auto" />
+                    <ChevronUp className="w-4 h-4 hidden group-open:inline ml-auto" />
+                  </summary>
+                  <div className="mt-4 space-y-3">
+                    <div>
+                      <span className="font-bold text-gray-900 dark:text-white text-sm">Enrollment Column:</span>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">enrollment, enrollmentno, roll, rollno, regno, studentid, id, matricno</p>
+                    </div>
+                    <div>
+                      <span className="font-bold text-gray-900 dark:text-white text-sm">Name Column:</span>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">name, studentname, fullname, candidate, firstname</p>
+                    </div>
+                    <div>
+                      <span className="font-bold text-gray-900 dark:text-white text-sm">Department Column:</span>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">department, dept, branch, course, program</p>
+                    </div>
+                  </div>
+                </details>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold uppercase tracking-widest text-gray-900 dark:text-white">Template Preview (Auto Slide)</h3>
+                <div className="text-[11px] font-semibold tracking-wide text-gray-600 dark:text-gray-400">Every 3.5s</div>
+              </div>
+
+              <div
+                className="relative overflow-hidden rounded-2xl h-[660px]"
+                onMouseEnter={() => setIsTemplatePaused(true)}
+                onMouseLeave={() => setIsTemplatePaused(false)}
+              >
+                <motion.div
+                  className="flex h-full"
+                  animate={{ x: `-${activeTemplateSlide * 100}%` }}
+                  transition={{ duration: 0.8, ease: 'easeInOut' }}
+                >
+                  {/* Format 1 Template */}
+                  <div className="min-w-full h-full">
+                    <div className="rounded-2xl border-0 bg-transparent dark:bg-transparent overflow-hidden relative h-full flex flex-col">
+                      <div className="relative overflow-hidden flex-1">
+                        <div className="absolute inset-0 pointer-events-none z-10 bg-gradient-to-br from-transparent via-white/26 to-white/70 dark:from-transparent dark:via-black/26 dark:to-black/70 blur-lg" />
+                        <div className="absolute left-0 top-0 bottom-0 w-24 pointer-events-none z-[12] bg-gradient-to-r from-white via-white/70 to-transparent dark:from-black dark:via-black/70 dark:to-transparent" />
+                        <div className="absolute right-0 top-0 bottom-0 w-24 pointer-events-none z-[12] bg-gradient-to-l from-white via-white/70 to-transparent dark:from-black dark:via-black/70 dark:to-transparent" />
+                        <div className="absolute inset-x-0 bottom-0 h-20 pointer-events-none z-[11] bg-gradient-to-b from-transparent via-white/80 to-white dark:from-transparent dark:via-black/80 dark:to-black" />
+
+                        <div
+                          className="p-4 pb-28"
+                          style={{
+                            WebkitMaskImage: 'radial-gradient(ellipse 92% 88% at center, rgba(0,0,0,1) 62%, rgba(0,0,0,0.85) 78%, rgba(0,0,0,0) 100%)',
+                            maskImage: 'radial-gradient(ellipse 92% 88% at center, rgba(0,0,0,1) 62%, rgba(0,0,0,0.85) 78%, rgba(0,0,0,0) 100%)',
+                            WebkitMaskRepeat: 'no-repeat',
+                            maskRepeat: 'no-repeat',
+                            WebkitMaskSize: '100% 100%',
+                            maskSize: '100% 100%'
+                          }}
+                        >
+                          <div className="w-full border-0 rounded-none overflow-hidden bg-[#0b0b0f] dark:bg-transparent shadow-none [&_*]:border-0">
+                            <div className="flex bg-black dark:bg-black">
+                              <div className="w-10 h-11 flex items-center justify-center text-xs font-bold text-gray-100 bg-black dark:bg-black"></div>
+                              <div className="flex-1 h-11 flex items-center justify-center font-bold text-sm uppercase tracking-widest text-gray-100 bg-black dark:bg-black text-center">
+                                A
+                              </div>
+                              <div className="flex-1 h-11 flex items-center justify-center font-bold text-sm uppercase tracking-widest text-gray-500 dark:text-gray-500 bg-black dark:bg-black text-center">
+                                B
+                              </div>
+                              <div className="flex-1 h-11 flex items-center justify-center font-bold text-sm uppercase tracking-widest text-gray-500 dark:text-gray-500 bg-black dark:bg-black text-center">
+                                C
+                              </div>
+                            </div>
+
+                            <div className="flex bg-gray-200 dark:bg-gray-200">
+                              <div className="w-10 h-11 flex items-center justify-center text-xs font-bold text-black dark:text-black bg-gray-300 dark:bg-gray-300"></div>
+                              <div className="flex-1 h-11 flex items-center px-4 font-sans font-extrabold text-sm text-black dark:text-black">
+                                Enrollment No
+                              </div>
+                              <div className="flex-1 h-11"></div>
+                              <div className="flex-1 h-11"></div>
+                            </div>
+
+                            {[
+                              { num: 1, value: 'BTCS25O1001' },
+                              { num: 2, value: 'BTCS25O1002' },
+                              { num: 3, value: 'BTCS25O1003' },
+                              { num: 4, value: 'BTCS25O1004' },
+                              { num: 5, value: 'BTCS25O1005' },
+                              { num: 6, value: 'BTCS25O1006' },
+                              { num: 7, value: 'BTCS25O1007' },
+                              { num: 8, value: 'BTCS25O1008' },
+                              { num: 9, value: 'BTCS25O1009' },
+                              { num: 10, value: 'BTCS25O1010' }
+                            ].map((row) => (
+                              <div key={row.num} className="flex hover:bg-[#171922] dark:hover:bg-gray-50 transition-colors">
+                                <div className="w-10 h-11 flex items-center justify-center text-xs font-bold text-black dark:text-black bg-white dark:bg-white">
+                                  {row.num}
+                                </div>
+                                <div className="flex-1 h-11 flex items-center px-4 font-extrabold text-sm text-black dark:text-black bg-white dark:bg-white truncate">
+                                  {row.value}
+                                </div>
+                                <div className="flex-1 h-11 bg-white dark:bg-white"></div>
+                                <div className="flex-1 h-11 bg-white dark:bg-white"></div>
+                              </div>
+                            ))}
+
+                            {Array.from({ length: 30 }).map((_, idx) => (
+                              <div key={`empty-f1-${idx}`} className="flex">
+                                <div className="w-10 h-11 bg-white dark:bg-white"></div>
+                                <div className="flex-1 h-11 bg-white dark:bg-white"></div>
+                                <div className="flex-1 h-11 bg-white dark:bg-white"></div>
+                                <div className="flex-1 h-11 bg-white dark:bg-white"></div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="absolute left-1/2 -translate-x-1/2 -translate-y-1 bottom-10 z-20 px-5 py-1.5 rounded-full bg-orange-50 dark:bg-orange-500/10 border-2 border-orange-500 dark:border-orange-400 ring-2 ring-orange-200 dark:ring-orange-900 backdrop-blur-lg shadow-xl">
+                          <p className="text-sm md:text-base font-black tracking-wider text-gray-900 dark:text-white whitespace-nowrap">FORMAT 1 — Enrollment Only</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Format 2 Template */}
+                  <div className="min-w-full h-full">
+                    <div className="rounded-2xl border-0 bg-transparent dark:bg-transparent overflow-hidden relative h-full flex flex-col">
+                      <div className="relative overflow-hidden flex-1">
+                        <div className="absolute inset-0 pointer-events-none z-10 bg-gradient-to-br from-transparent via-white/26 to-white/70 dark:from-transparent dark:via-black/26 dark:to-black/70 blur-lg" />
+                        <div className="absolute left-0 top-0 bottom-0 w-24 pointer-events-none z-[12] bg-gradient-to-r from-white via-white/70 to-transparent dark:from-black dark:via-black/70 dark:to-transparent" />
+                        <div className="absolute right-0 top-0 bottom-0 w-24 pointer-events-none z-[12] bg-gradient-to-l from-white via-white/70 to-transparent dark:from-black dark:via-black/70 dark:to-transparent" />
+                        <div className="absolute inset-x-0 bottom-0 h-20 pointer-events-none z-[11] bg-gradient-to-b from-transparent via-white/80 to-white dark:from-transparent dark:via-black/80 dark:to-black" />
+
+                        <div
+                          className="p-4 pb-28"
+                          style={{
+                            WebkitMaskImage: 'radial-gradient(ellipse 92% 88% at center, rgba(0,0,0,1) 62%, rgba(0,0,0,0.85) 78%, rgba(0,0,0,0) 100%)',
+                            maskImage: 'radial-gradient(ellipse 92% 88% at center, rgba(0,0,0,1) 62%, rgba(0,0,0,0.85) 78%, rgba(0,0,0,0) 100%)',
+                            WebkitMaskRepeat: 'no-repeat',
+                            maskRepeat: 'no-repeat',
+                            WebkitMaskSize: '100% 100%',
+                            maskSize: '100% 100%'
+                          }}
+                        >
+                          <div className="w-full border-0 rounded-none overflow-hidden bg-[#0b0b0f] dark:bg-transparent shadow-none [&_*]:border-0">
+                            <div className="flex bg-black dark:bg-black">
+                              <div className="w-10 h-11 flex items-center justify-center text-xs font-bold text-gray-100 bg-black dark:bg-black"></div>
+                              <div className="flex-1 h-11 flex items-center justify-center font-bold text-sm uppercase tracking-widest text-gray-100 bg-black dark:bg-black text-center">
+                                A
+                              </div>
+                              <div className="flex-1 h-11 flex items-center justify-center font-bold text-sm uppercase tracking-widest text-gray-100 bg-black dark:bg-black text-center">
+                                B
+                              </div>
+                              <div className="flex-1 h-11 flex items-center justify-center font-bold text-sm uppercase tracking-widest text-gray-100 bg-black dark:bg-black text-center">
+                                C
+                              </div>
+                            </div>
+
+                            <div className="flex bg-gray-200 dark:bg-gray-200">
+                              <div className="w-10 h-11 flex items-center justify-center text-xs font-bold text-black dark:text-black bg-gray-300 dark:bg-gray-300"></div>
+                              <div className="flex-1 h-11 flex items-center px-4 font-sans font-extrabold text-sm text-black dark:text-black">
+                                Name
+                              </div>
+                              <div className="flex-1 h-11 flex items-center px-4 font-sans font-extrabold text-sm text-black dark:text-black">
+                                Enrollment
+                              </div>
+                              <div className="flex-1 h-11 flex items-center px-4 font-sans font-extrabold text-sm text-black dark:text-black">
+                                Department
+                              </div>
+                            </div>
+
+                            {[
+                              { num: 1, name: 'Rajesh Kumar', enrollment: 'BTCS25O1001', dept: 'Computer Science' },
+                              { num: 2, name: 'Priya Sharma', enrollment: 'BTCS25O1002', dept: 'Computer Science' },
+                              { num: 3, name: 'Amit Patel', enrollment: 'BTEC25O1001', dept: 'Electronics' },
+                              { num: 4, name: 'Neha Singh', enrollment: 'BTEC25O1002', dept: 'Electronics' },
+                              { num: 5, name: 'Vikram Desai', enrollment: 'BTME25O1001', dept: 'Mechanical' },
+                              { num: 6, name: 'Ananya Verma', enrollment: 'BTME25O1002', dept: 'Mechanical' },
+                              { num: 7, name: 'Sakshi Rao', enrollment: 'BTCS25O1007', dept: 'Computer Science' },
+                              { num: 8, name: 'Rohan Nair', enrollment: 'BTEC25O1003', dept: 'Electronics' },
+                              { num: 9, name: 'Ishita Gupta', enrollment: 'BTME25O1003', dept: 'Mechanical' },
+                              { num: 10, name: 'Arjun Menon', enrollment: 'BTCS25O1008', dept: 'Computer Science' }
+                            ].map((row) => (
+                              <div key={row.num} className="flex hover:bg-[#171922] dark:hover:bg-gray-50 transition-colors">
+                                <div className="w-10 h-11 flex items-center justify-center text-xs font-bold text-black dark:text-black bg-white dark:bg-white">
+                                  {row.num}
+                                </div>
+                                <div className="flex-1 h-11 flex items-center px-4 font-extrabold text-sm text-black dark:text-black bg-white dark:bg-white truncate">
+                                  {row.name}
+                                </div>
+                                <div className="flex-1 h-11 flex items-center px-4 font-extrabold text-sm text-black dark:text-black bg-white dark:bg-white truncate">
+                                  {row.enrollment}
+                                </div>
+                                <div className="flex-1 h-11 flex items-center px-4 text-sm text-black dark:text-black font-extrabold bg-white dark:bg-white truncate">
+                                  {row.dept}
+                                </div>
+                              </div>
+                            ))}
+
+                            {Array.from({ length: 30 }).map((_, idx) => (
+                              <div key={`empty-f2-${idx}`} className="flex">
+                                <div className="w-10 h-11 bg-white dark:bg-white"></div>
+                                <div className="flex-1 h-11 bg-white dark:bg-white"></div>
+                                <div className="flex-1 h-11 bg-white dark:bg-white"></div>
+                                <div className="flex-1 h-11 bg-white dark:bg-white"></div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="absolute left-1/2 -translate-x-1/2 -translate-y-1 bottom-10 z-20 px-5 py-1.5 rounded-full bg-orange-50 dark:bg-orange-500/10 border-2 border-orange-500 dark:border-orange-400 ring-2 ring-orange-200 dark:ring-orange-900 backdrop-blur-lg shadow-xl">
+                          <p className="text-sm md:text-base font-black tracking-wider text-gray-900 dark:text-white whitespace-nowrap">FORMAT 2 — Name + Enrollment + Department</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+
+                <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex items-center justify-center gap-2 z-30">
+                  {[0, 1].map((index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => setActiveTemplateSlide(index)}
+                      className={`h-2.5 rounded-full transition-all ${
+                        activeTemplateSlide === index
+                          ? 'w-8 bg-orange-500'
+                          : 'w-2.5 bg-orange-300/70 dark:bg-orange-500/50 hover:bg-orange-400 dark:hover:bg-orange-400'
+                      }`}
+                      aria-label={`Show template ${index + 1}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
 
           {/* Preview Zone */}
           <AnimatePresence>
