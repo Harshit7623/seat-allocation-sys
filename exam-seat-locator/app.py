@@ -34,8 +34,7 @@ import config
 from core import cache          # pre-loaded singleton — logs now visible
 from core.cleanup import start_cleanup_daemon
 from core.backend_sync import sync_backend_plans
-from core.cloud_sync import start_sync_worker, verify_signature, enqueue_notification
-from core.sync_queue import stats as sync_queue_stats
+from core.cloud_sync import verify_signature
 from core.rate_limit import FixedWindowRateLimiter, get_client_ip
 
 # Start the background cleanup daemon as soon as the process is up.
@@ -70,11 +69,6 @@ def _next_three_dates() -> list[str]:
 sync_stats = sync_backend_plans()
 if sync_stats.get("copied") or sync_stats.get("updated"):
     cache.reload()
-
-# Start async notification consumer worker
-# Temporarily disabled
-# start_sync_worker(cache)
-
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
@@ -221,7 +215,7 @@ logger = logging.getLogger(__name__)
 
 @app.route("/webhook", methods=["POST"])
 def sync_notify():
-    """Receive signed cloud notification and enqueue for async processing."""
+    """Receive signed cloud notification and process payload inline."""
     client_ip = _client_ip()
     logger.info(f"🔔 [WEBHOOK] Received cloud notification from IP: {client_ip}")
 
@@ -312,12 +306,6 @@ def sync_notify():
     except Exception as e:
         logger.error(f"❌ [WEBHOOK] Sync failed: {e}")
         return jsonify({"accepted": False, "error": str(e)}), 400
-
-
-@app.route("/api/sync/stats", methods=["GET"])
-def sync_stats_endpoint():
-    """Queue stats for operational visibility."""
-    return jsonify({"queue": sync_queue_stats()})
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
