@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getToken } from '../utils/tokenStorage';
@@ -100,7 +100,7 @@ const UploadPage = ({ showToast }) => {
 
     const intervalId = setInterval(() => {
       setActiveTemplateSlide((prev) => (prev + 1) % 2);
-    }, 3500);
+    }, 2000);
 
     return () => clearInterval(intervalId);
   }, [uploadResult, isTemplatePaused]);
@@ -343,12 +343,12 @@ const UploadPage = ({ showToast }) => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#050505] py-8 px-4 transition-colors duration-300">
-      <div className="max-w-5xl mx-auto space-y-8">
+      <div className="max-w-6xl mx-auto space-y-8">
         
         <SessionIndicator />
 
         {/* Hero Section */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-gray-200 dark:border-gray-800">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-gray-200 dark:border-gray-700">
           <div>
             <div className="flex items-center gap-2 mb-2">
               <div className="relative w-3 h-3">
@@ -524,7 +524,7 @@ const UploadPage = ({ showToast }) => {
         )}
 
         {/* Upload Form */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[4fr_5fr] gap-8">
           {/* Upload Zone */}
           <div className="space-y-6">
             <div className="glass-card border-2 border-dashed border-gray-300 dark:border-gray-700 p-8 flex flex-col items-center justify-center min-h-[400px] relative overflow-hidden hover:border-orange-400 dark:hover:border-orange-400 transition-colors group rounded-2xl bg-white dark:bg-gray-900">
@@ -709,8 +709,7 @@ const UploadPage = ({ showToast }) => {
               </div>
 
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold uppercase tracking-widest text-gray-900 dark:text-white">Template Preview (Auto Slide)</h3>
-                <div className="text-[11px] font-semibold tracking-wide text-gray-600 dark:text-gray-400">Every 3.5s</div>
+                <h3 className="text-sm font-bold uppercase tracking-widest text-gray-900 dark:text-white">Template Preview</h3>
               </div>
 
               <div
@@ -724,179 +723,129 @@ const UploadPage = ({ showToast }) => {
                   transition={{ duration: 0.8, ease: 'easeInOut' }}
                 >
                   {/* Format 1 Template */}
-                  <div className="min-w-full h-full">
-                    <div className="rounded-2xl border-0 bg-transparent dark:bg-transparent overflow-hidden relative h-full flex flex-col">
-                      <div className="relative overflow-hidden flex-1">
-                        <div className="absolute inset-0 pointer-events-none z-10 bg-gradient-to-br from-transparent via-white/26 to-white/70 dark:from-transparent dark:via-black/26 dark:to-black/70 blur-lg" />
-                        <div className="absolute left-0 top-0 bottom-0 w-24 pointer-events-none z-[12] bg-gradient-to-r from-white via-white/70 to-transparent dark:from-black dark:via-black/70 dark:to-transparent" />
-                        <div className="absolute right-0 top-0 bottom-0 w-24 pointer-events-none z-[12] bg-gradient-to-l from-white via-white/70 to-transparent dark:from-black dark:via-black/70 dark:to-transparent" />
-                        <div className="absolute inset-x-0 bottom-0 h-20 pointer-events-none z-[11] bg-gradient-to-b from-transparent via-white/80 to-white dark:from-transparent dark:via-black/80 dark:to-black" />
-
-                        <div
-                          className="p-4 pb-28"
-                          style={{
-                            WebkitMaskImage: 'radial-gradient(ellipse 92% 88% at center, rgba(0,0,0,1) 62%, rgba(0,0,0,0.85) 78%, rgba(0,0,0,0) 100%)',
-                            maskImage: 'radial-gradient(ellipse 92% 88% at center, rgba(0,0,0,1) 62%, rgba(0,0,0,0.85) 78%, rgba(0,0,0,0) 100%)',
-                            WebkitMaskRepeat: 'no-repeat',
-                            maskRepeat: 'no-repeat',
-                            WebkitMaskSize: '100% 100%',
-                            maskSize: '100% 100%'
-                          }}
-                        >
-                          <div className="w-full border-0 rounded-none overflow-hidden bg-[#0b0b0f] dark:bg-transparent shadow-none [&_*]:border-0">
-                            <div className="flex bg-black dark:bg-black">
-                              <div className="w-10 h-11 flex items-center justify-center text-xs font-bold text-gray-100 bg-black dark:bg-black"></div>
-                              <div className="flex-1 h-11 flex items-center justify-center font-bold text-sm uppercase tracking-widest text-gray-100 bg-black dark:bg-black text-center">
-                                A
-                              </div>
-                              <div className="flex-1 h-11 flex items-center justify-center font-bold text-sm uppercase tracking-widest text-gray-500 dark:text-gray-500 bg-black dark:bg-black text-center">
-                                B
-                              </div>
-                              <div className="flex-1 h-11 flex items-center justify-center font-bold text-sm uppercase tracking-widest text-gray-500 dark:text-gray-500 bg-black dark:bg-black text-center">
-                                C
-                              </div>
+                  <div className="min-w-full h-full pt-4">
+                    <div className="relative h-full w-full flex flex-col items-start justify-start">
+                      <div className="w-full flex-1" style={{ WebkitMaskImage: 'linear-gradient(to bottom, black 40%, transparent 100%)', maskImage: 'linear-gradient(to bottom, black 40%, transparent 100%)' }}>
+                        <div className="w-full h-full" style={{ WebkitMaskImage: 'linear-gradient(to right, black 85%, transparent 100%)', maskImage: 'linear-gradient(to right, black 85%, transparent 100%)' }}>
+                          <div className="w-full overflow-hidden bg-white dark:bg-[#0d1117] border border-gray-200 dark:border-gray-800 rounded-xl font-mono text-sm shadow-2xl pb-16">
+                            
+                            <div className="grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] bg-gray-100 dark:bg-[#161b22] border-b border-gray-200 dark:border-gray-600 text-gray-500 dark:text-[#8b949e] font-bold">
+                              <div className="w-12 h-11 flex items-center justify-center opacity-50 border-r border-gray-200 dark:border-gray-700"></div>
+                              <div className="flex-1 h-11 flex items-center justify-center uppercase tracking-widest border-r border-gray-200 dark:border-gray-700">A</div>
+                              <div className="flex-1 h-11 flex items-center justify-center uppercase tracking-widest border-r border-gray-200 dark:border-gray-700">B</div>
+                              <div className="flex-1 h-11 flex items-center justify-center uppercase tracking-widest">C</div>
                             </div>
-
-                            <div className="flex bg-gray-200 dark:bg-gray-200">
-                              <div className="w-10 h-11 flex items-center justify-center text-xs font-bold text-black dark:text-black bg-gray-300 dark:bg-gray-300"></div>
-                              <div className="flex-1 h-11 flex items-center px-4 font-sans font-extrabold text-sm text-black dark:text-black">
-                                Enrollment No
-                              </div>
-                              <div className="flex-1 h-11"></div>
-                              <div className="flex-1 h-11"></div>
+                            
+                            <div className="grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] bg-white dark:bg-[#0d1117] border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-[#e6edf3] font-bold">
+                              <div className="w-12 h-11 flex items-center justify-center text-gray-500 dark:text-[#8b949e] bg-gray-100 dark:bg-[#161b22] border-r border-gray-200 dark:border-gray-700">1</div>
+                              <div className="flex-1 h-11 flex items-center px-4 border-r border-gray-200 dark:border-gray-700">Enrollment No</div>
+                              <div className="flex-1 h-11 flex items-center px-4 border-r border-gray-200 dark:border-gray-700"></div>
+                              <div className="flex-1 h-11 flex items-center px-4"></div>
                             </div>
 
                             {[
-                              { num: 1, value: 'BTCS25O1001' },
-                              { num: 2, value: 'BTCS25O1002' },
-                              { num: 3, value: 'BTCS25O1003' },
-                              { num: 4, value: 'BTCS25O1004' },
-                              { num: 5, value: 'BTCS25O1005' },
-                              { num: 6, value: 'BTCS25O1006' },
-                              { num: 7, value: 'BTCS25O1007' },
-                              { num: 8, value: 'BTCS25O1008' },
-                              { num: 9, value: 'BTCS25O1009' },
-                              { num: 10, value: 'BTCS25O1010' }
+                              { num: 2, value: 'BTCS25O1001' },
+                              { num: 3, value: 'BTCS25O1002' },
+                              { num: 4, value: 'BTCS25O1003' },
+                              { num: 5, value: 'BTCS25O1004' },
+                              { num: 6, value: 'BTCS25O1005' },
+                              { num: 7, value: 'BTCS25O1006' },
+                              { num: 8, value: 'BTCS25O1007' },
+                              { num: 9, value: 'BTCS25O1008' },
+                              { num: 10, value: 'BTCS25O1009' }
                             ].map((row) => (
-                              <div key={row.num} className="flex hover:bg-[#171922] dark:hover:bg-gray-50 transition-colors">
-                                <div className="w-10 h-11 flex items-center justify-center text-xs font-bold text-black dark:text-black bg-white dark:bg-white">
+                              <div key={row.num} className="grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] hover:bg-gray-50 dark:hover:bg-[#161b22] transition-colors border-b border-gray-200 dark:border-gray-700">
+                                <div className="w-12 h-11 flex items-center justify-center text-gray-500 dark:text-[#8b949e] bg-gray-100 dark:bg-[#161b22] border-r border-gray-200 dark:border-gray-700">
                                   {row.num}
                                 </div>
-                                <div className="flex-1 h-11 flex items-center px-4 font-extrabold text-sm text-black dark:text-black bg-white dark:bg-white truncate">
+                                <div className="flex-1 h-11 flex items-center px-4 text-emerald-600 dark:text-[#7ee787] border-r border-gray-200 dark:border-gray-700 truncate">
                                   {row.value}
                                 </div>
-                                <div className="flex-1 h-11 bg-white dark:bg-white"></div>
-                                <div className="flex-1 h-11 bg-white dark:bg-white"></div>
+                                <div className="flex-1 h-11 border-r border-gray-200 dark:border-gray-700"></div>
+                                <div className="flex-1 h-11"></div>
                               </div>
                             ))}
 
-                            {Array.from({ length: 30 }).map((_, idx) => (
-                              <div key={`empty-f1-${idx}`} className="flex">
-                                <div className="w-10 h-11 bg-white dark:bg-white"></div>
-                                <div className="flex-1 h-11 bg-white dark:bg-white"></div>
-                                <div className="flex-1 h-11 bg-white dark:bg-white"></div>
-                                <div className="flex-1 h-11 bg-white dark:bg-white"></div>
+                            {[11, 12, 13, 14, 15].map((num) => (
+                              <div key={num} className="grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] border-b border-gray-200 dark:border-gray-700">
+                                <div className="w-12 h-11 flex items-center justify-center text-gray-500 dark:text-[#8b949e] bg-gray-100 dark:bg-[#161b22] border-r border-gray-200 dark:border-gray-700">{num}</div>
+                                <div className="flex-1 h-11 border-r border-gray-200 dark:border-gray-700"></div>
+                                <div className="flex-1 h-11 border-r border-gray-200 dark:border-gray-700"></div>
+                                <div className="flex-1 h-11"></div>
                               </div>
                             ))}
                           </div>
                         </div>
+                      </div>
 
-                        <div className="absolute left-1/2 -translate-x-1/2 -translate-y-1 bottom-10 z-20 px-5 py-1.5 rounded-full bg-orange-50 dark:bg-orange-500/10 border-2 border-orange-500 dark:border-orange-400 ring-2 ring-orange-200 dark:ring-orange-900 backdrop-blur-lg shadow-xl">
-                          <p className="text-sm md:text-base font-black tracking-wider text-gray-900 dark:text-white whitespace-nowrap">FORMAT 1 — Enrollment Only</p>
-                        </div>
+                      {/* Deep dark fade overlay at the bottom, placed under the badge */}
+                      <div className="absolute inset-x-0 bottom-0 h-[30%] bg-gradient-to-t from-gray-50 dark:from-black to-transparent pointer-events-none z-10"></div>
+
+                      <div className="absolute left-1/2 -translate-x-1/2 bottom-12 z-20 px-8 py-3 rounded-2xl bg-white dark:bg-[#161b22] border border-gray-200 dark:border-gray-700 shadow-xl flex flex-col items-center">
+                        <p className="text-sm font-bold tracking-widest text-gray-900 dark:text-[#e6edf3]">FORMAT 1</p>
+                        <p className="text-xs text-gray-500 dark:text-[#8b949e] uppercase mt-1">Enrollment Only</p>
                       </div>
                     </div>
                   </div>
 
                   {/* Format 2 Template */}
-                  <div className="min-w-full h-full">
-                    <div className="rounded-2xl border-0 bg-transparent dark:bg-transparent overflow-hidden relative h-full flex flex-col">
-                      <div className="relative overflow-hidden flex-1">
-                        <div className="absolute inset-0 pointer-events-none z-10 bg-gradient-to-br from-transparent via-white/26 to-white/70 dark:from-transparent dark:via-black/26 dark:to-black/70 blur-lg" />
-                        <div className="absolute left-0 top-0 bottom-0 w-24 pointer-events-none z-[12] bg-gradient-to-r from-white via-white/70 to-transparent dark:from-black dark:via-black/70 dark:to-transparent" />
-                        <div className="absolute right-0 top-0 bottom-0 w-24 pointer-events-none z-[12] bg-gradient-to-l from-white via-white/70 to-transparent dark:from-black dark:via-black/70 dark:to-transparent" />
-                        <div className="absolute inset-x-0 bottom-0 h-20 pointer-events-none z-[11] bg-gradient-to-b from-transparent via-white/80 to-white dark:from-transparent dark:via-black/80 dark:to-black" />
-
-                        <div
-                          className="p-4 pb-28"
-                          style={{
-                            WebkitMaskImage: 'radial-gradient(ellipse 92% 88% at center, rgba(0,0,0,1) 62%, rgba(0,0,0,0.85) 78%, rgba(0,0,0,0) 100%)',
-                            maskImage: 'radial-gradient(ellipse 92% 88% at center, rgba(0,0,0,1) 62%, rgba(0,0,0,0.85) 78%, rgba(0,0,0,0) 100%)',
-                            WebkitMaskRepeat: 'no-repeat',
-                            maskRepeat: 'no-repeat',
-                            WebkitMaskSize: '100% 100%',
-                            maskSize: '100% 100%'
-                          }}
-                        >
-                          <div className="w-full border-0 rounded-none overflow-hidden bg-[#0b0b0f] dark:bg-transparent shadow-none [&_*]:border-0">
-                            <div className="flex bg-black dark:bg-black">
-                              <div className="w-10 h-11 flex items-center justify-center text-xs font-bold text-gray-100 bg-black dark:bg-black"></div>
-                              <div className="flex-1 h-11 flex items-center justify-center font-bold text-sm uppercase tracking-widest text-gray-100 bg-black dark:bg-black text-center">
-                                A
-                              </div>
-                              <div className="flex-1 h-11 flex items-center justify-center font-bold text-sm uppercase tracking-widest text-gray-100 bg-black dark:bg-black text-center">
-                                B
-                              </div>
-                              <div className="flex-1 h-11 flex items-center justify-center font-bold text-sm uppercase tracking-widest text-gray-100 bg-black dark:bg-black text-center">
-                                C
-                              </div>
+                  <div className="min-w-full h-full pt-4">
+                    <div className="relative h-full w-full flex flex-col items-start justify-start">
+                      <div className="w-full flex-1" style={{ WebkitMaskImage: 'linear-gradient(to bottom, black 40%, transparent 100%)', maskImage: 'linear-gradient(to bottom, black 40%, transparent 100%)' }}>
+                        <div className="w-full h-full" style={{ WebkitMaskImage: 'linear-gradient(to right, black 85%, transparent 100%)', maskImage: 'linear-gradient(to right, black 85%, transparent 100%)' }}>
+                          <div className="w-full overflow-hidden bg-white dark:bg-[#0d1117] border border-gray-200 dark:border-gray-800 rounded-xl font-mono text-sm shadow-2xl pb-16">
+                            
+                            <div className="grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] bg-gray-100 dark:bg-[#161b22] border-b border-gray-200 dark:border-gray-600 text-gray-500 dark:text-[#8b949e] font-bold">
+                              <div className="w-12 h-11 flex items-center justify-center opacity-50 border-r border-gray-200 dark:border-gray-700"></div>
+                              <div className="flex-1 h-11 flex items-center justify-center uppercase tracking-widest border-r border-gray-200 dark:border-gray-700">A</div>
+                              <div className="flex-1 h-11 flex items-center justify-center uppercase tracking-widest border-r border-gray-200 dark:border-gray-700">B</div>
+                              <div className="flex-1 h-11 flex items-center justify-center uppercase tracking-widest">C</div>
                             </div>
-
-                            <div className="flex bg-gray-200 dark:bg-gray-200">
-                              <div className="w-10 h-11 flex items-center justify-center text-xs font-bold text-black dark:text-black bg-gray-300 dark:bg-gray-300"></div>
-                              <div className="flex-1 h-11 flex items-center px-4 font-sans font-extrabold text-sm text-black dark:text-black">
-                                Name
-                              </div>
-                              <div className="flex-1 h-11 flex items-center px-4 font-sans font-extrabold text-sm text-black dark:text-black">
-                                Enrollment
-                              </div>
-                              <div className="flex-1 h-11 flex items-center px-4 font-sans font-extrabold text-sm text-black dark:text-black">
-                                Department
-                              </div>
+                            
+                            <div className="grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] bg-white dark:bg-[#0d1117] border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-[#e6edf3] font-bold">
+                              <div className="w-12 h-11 flex items-center justify-center text-gray-500 dark:text-[#8b949e] bg-gray-100 dark:bg-[#161b22] border-r border-gray-200 dark:border-gray-700">1</div>
+                              <div className="flex-1 h-11 flex items-center px-4 border-r border-gray-200 dark:border-gray-700">Name</div>
+                              <div className="flex-1 h-11 flex items-center px-4 border-r border-gray-200 dark:border-gray-700">Enrollment</div>
+                              <div className="flex-1 h-11 flex items-center px-4">Department</div>
                             </div>
 
                             {[
-                              { num: 1, name: 'Rajesh Kumar', enrollment: 'BTCS25O1001', dept: 'Computer Science' },
-                              { num: 2, name: 'Priya Sharma', enrollment: 'BTCS25O1002', dept: 'Computer Science' },
-                              { num: 3, name: 'Amit Patel', enrollment: 'BTEC25O1001', dept: 'Electronics' },
-                              { num: 4, name: 'Neha Singh', enrollment: 'BTEC25O1002', dept: 'Electronics' },
-                              { num: 5, name: 'Vikram Desai', enrollment: 'BTME25O1001', dept: 'Mechanical' },
-                              { num: 6, name: 'Ananya Verma', enrollment: 'BTME25O1002', dept: 'Mechanical' },
-                              { num: 7, name: 'Sakshi Rao', enrollment: 'BTCS25O1007', dept: 'Computer Science' },
-                              { num: 8, name: 'Rohan Nair', enrollment: 'BTEC25O1003', dept: 'Electronics' },
-                              { num: 9, name: 'Ishita Gupta', enrollment: 'BTME25O1003', dept: 'Mechanical' },
-                              { num: 10, name: 'Arjun Menon', enrollment: 'BTCS25O1008', dept: 'Computer Science' }
+                              { num: 2, name: 'Rajesh Kumar', enrollment: 'BTCS25O1001', dept: 'Computer Science' },
+                              { num: 3, name: 'Priya Sharma', enrollment: 'BTCS25O1002', dept: 'Computer Science' },
+                              { num: 4, name: 'Amit Patel', enrollment: 'BTEC25O1001', dept: 'Electronics' },
+                              { num: 5, name: 'Neha Singh', enrollment: 'BTEC25O1002', dept: 'Electronics' },
+                              { num: 6, name: 'Vikram Desai', enrollment: 'BTME25O1001', dept: 'Mechanical' },
+                              { num: 7, name: 'Ananya Verma', enrollment: 'BTME25O1002', dept: 'Mechanical' },
+                              { num: 8, name: 'Sakshi Rao', enrollment: 'BTCS25O1007', dept: 'Computer Science' },
+                              { num: 9, name: 'Rohan Nair', enrollment: 'BTEC25O1003', dept: 'Electronics' },
+                              { num: 10, name: 'Ishita Gupta', enrollment: 'BTME25O1003', dept: 'Mechanical' }
                             ].map((row) => (
-                              <div key={row.num} className="flex hover:bg-[#171922] dark:hover:bg-gray-50 transition-colors">
-                                <div className="w-10 h-11 flex items-center justify-center text-xs font-bold text-black dark:text-black bg-white dark:bg-white">
-                                  {row.num}
-                                </div>
-                                <div className="flex-1 h-11 flex items-center px-4 font-extrabold text-sm text-black dark:text-black bg-white dark:bg-white truncate">
-                                  {row.name}
-                                </div>
-                                <div className="flex-1 h-11 flex items-center px-4 font-extrabold text-sm text-black dark:text-black bg-white dark:bg-white truncate">
-                                  {row.enrollment}
-                                </div>
-                                <div className="flex-1 h-11 flex items-center px-4 text-sm text-black dark:text-black font-extrabold bg-white dark:bg-white truncate">
-                                  {row.dept}
-                                </div>
+                              <div key={row.num} className="grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] hover:bg-gray-50 dark:hover:bg-[#161b22] transition-colors border-b border-gray-200 dark:border-gray-700">
+                                <div className="w-12 h-11 flex items-center justify-center text-gray-500 dark:text-[#8b949e] bg-gray-100 dark:bg-[#161b22] border-r border-gray-200 dark:border-gray-700">{row.num}</div>
+                                <div className="flex-1 h-11 flex items-center px-4 text-blue-600 dark:text-[#79c0ff] border-r border-gray-200 dark:border-gray-700 truncate">{row.name}</div>
+                                <div className="flex-1 h-11 flex items-center px-4 text-emerald-600 dark:text-[#7ee787] border-r border-gray-200 dark:border-gray-700 truncate">{row.enrollment}</div>
+                                <div className="flex-1 h-11 flex items-center px-4 text-purple-600 dark:text-[#d2a8ff] truncate">{row.dept}</div>
                               </div>
                             ))}
-
-                            {Array.from({ length: 30 }).map((_, idx) => (
-                              <div key={`empty-f2-${idx}`} className="flex">
-                                <div className="w-10 h-11 bg-white dark:bg-white"></div>
-                                <div className="flex-1 h-11 bg-white dark:bg-white"></div>
-                                <div className="flex-1 h-11 bg-white dark:bg-white"></div>
-                                <div className="flex-1 h-11 bg-white dark:bg-white"></div>
+                            
+                            {[11, 12, 13, 14, 15].map((num) => (
+                              <div key={num} className="grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] border-b border-gray-200 dark:border-gray-700">
+                                <div className="w-12 h-11 flex items-center justify-center text-gray-500 dark:text-[#8b949e] bg-gray-100 dark:bg-[#161b22] border-r border-gray-200 dark:border-gray-700">{num}</div>
+                                <div className="flex-1 h-11 border-r border-gray-200 dark:border-gray-700"></div>
+                                <div className="flex-1 h-11 border-r border-gray-200 dark:border-gray-700"></div>
+                                <div className="flex-1 h-11"></div>
                               </div>
                             ))}
                           </div>
                         </div>
+                      </div>
 
-                        <div className="absolute left-1/2 -translate-x-1/2 -translate-y-1 bottom-10 z-20 px-5 py-1.5 rounded-full bg-orange-50 dark:bg-orange-500/10 border-2 border-orange-500 dark:border-orange-400 ring-2 ring-orange-200 dark:ring-orange-900 backdrop-blur-lg shadow-xl">
-                          <p className="text-sm md:text-base font-black tracking-wider text-gray-900 dark:text-white whitespace-nowrap">FORMAT 2 — Name + Enrollment + Department</p>
-                        </div>
+                      {/* Deep dark fade overlay at the bottom, placed under the badge */}
+                      <div className="absolute inset-x-0 bottom-0 h-[30%] bg-gradient-to-t from-gray-50 dark:from-black to-transparent pointer-events-none z-10"></div>
+
+                      <div className="absolute left-1/2 -translate-x-1/2 bottom-12 z-20 px-8 py-3 rounded-2xl bg-white dark:bg-[#161b22] border border-gray-200 dark:border-gray-700 shadow-xl flex flex-col items-center">
+                        <p className="text-sm font-bold tracking-widest text-gray-900 dark:text-[#e6edf3]">FORMAT 2</p>
+                        <p className="text-xs text-gray-500 dark:text-[#8b949e] uppercase mt-1">Name + Enrollment + Department</p>
                       </div>
                     </div>
                   </div>

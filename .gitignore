@@ -8,5 +8,5 @@ __pycache__/
 *.obsidian
 
 # Application cache and temporary files
-algo/cache/
+seat-alloc/algo/cache/
 temp_uploads/
